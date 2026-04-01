@@ -1,0 +1,14 @@
+[variables]
+NODE_OPTIONS = "--max-old-space-size=1024"
+NEXT_TELEMETRY_DISABLED = "1"
+
+[phases.build]
+cacheDirectories = [".next/cache"]
+cmds = [
+    "npm run build",
+    "cp -r public .next/standalone/public",
+    "cp -r .next/static .next/standalone/.next/static"
+]
+
+[start]
+cmd = "node .next/standalone/server.js & npx tsx src/lib/worker/index.ts & wait"
