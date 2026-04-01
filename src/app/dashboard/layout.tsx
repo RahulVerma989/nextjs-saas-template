@@ -5,12 +5,15 @@ import { CreditsProvider } from '@/context/credits-context';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
+import { UpdateBanner } from '@/components/update-banner';
+import { requireFeature } from '@/lib/features/gate';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  requireFeature('auth');
   return (
     <SessionProvider>
       <ThemeProvider>
@@ -19,6 +22,7 @@ export default function DashboardLayout({
             <div className="min-h-screen bg-background">
               <Sidebar />
               <DashboardShell>
+                <UpdateBanner />
                 <Header />
                 <main className="p-4 sm:p-6 lg:p-8">
                   {children}
