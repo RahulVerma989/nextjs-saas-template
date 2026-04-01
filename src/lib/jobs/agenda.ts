@@ -34,7 +34,7 @@ export async function getAgenda(): Promise<Agenda> {
       throw new Error('MongoDB database not available');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    /* eslint-disable @typescript-eslint/no-explicit-any */
     agenda = new Agenda({
       mongo: mongoConnection.db as any,
       processEvery: agendaConfig.processEvery,
@@ -44,9 +44,10 @@ export async function getAgenda(): Promise<Agenda> {
       defaultLockLimit: agendaConfig.defaultLockLimit,
       defaultLockLifetime: agendaConfig.defaultLockLifetime,
     } as any);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     // Fix for Agenda v5 + MongoDB driver v6 callback interop issue
-    const a = agenda as Record<string, unknown>;
+    const a = agenda as unknown as Record<string, unknown>;
     if (a._collection) {
       const col = a._collection as import('mongodb').Collection;
       col

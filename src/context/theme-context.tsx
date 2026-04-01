@@ -13,6 +13,7 @@ type Theme = 'light' | 'dark' | 'system';
 interface ThemeContextValue {
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -36,17 +37,15 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('system');
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window === 'undefined') return 'system';
+    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
+    return (stored && ['light', 'dark', 'system'].includes(stored)) ? stored : 'system';
+  });
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    if (stored && ['light', 'dark', 'system'].includes(stored)) {
-      setThemeState(stored);
-      applyTheme(stored);
-    } else {
-      applyTheme('system');
-    }
-  }, []);
+    applyTheme(theme);
+  }, [theme]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -65,8 +64,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyTheme(newTheme);
   }, []);
 
+  const toggleTheme = useCallback(() => {
+    const resolved = theme === 'system' ? getSystemTheme() : theme;
+    const next = resolved === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+  }, [theme, setTheme]);
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

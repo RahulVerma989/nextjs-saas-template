@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db/connection';
-import { Notification } from '@/lib/db/models/Notification';
+import { Notification } from '@/lib/db/models/notification.model';
 
 export async function GET(req: NextRequest) {
   try {

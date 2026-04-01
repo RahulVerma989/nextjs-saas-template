@@ -22,15 +22,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/billing`;
+
     const checkoutSession = await createCheckoutSession({
       userId: session.user.id,
       email: session.user.email!,
       plan,
+      returnUrl,
     });
 
     return NextResponse.json({
       success: true,
-      data: { url: checkoutSession.url },
+      data: { url: checkoutSession.checkoutUrl },
     });
   } catch (error) {
     console.error('POST /api/checkout error:', error);

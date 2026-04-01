@@ -1,7 +1,8 @@
 import { auth } from '@/lib/auth/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db/connection';
-import { getUserCrud } from '@/lib/db/crud/user';
+import { getUserCrud } from '@/lib/db/crud/user.crud';
+import type { IUser } from '@/types/db.types';
 
 export async function GET() {
   try {
@@ -15,7 +16,7 @@ export async function GET() {
 
     await connectDB();
     const userCrud = getUserCrud();
-    const user = await userCrud.getById(session.user.id);
+    const user = await userCrud.findById(session.user.id);
 
     if (!user) {
       return NextResponse.json(
@@ -30,9 +31,9 @@ export async function GET() {
         id: user._id,
         name: user.name,
         email: user.email,
-        image: user.image,
+        image: user.avatarUrl,
         plan: user.plan,
-        credits: user.credits,
+        credits: user.creditBalance,
         preferences: user.preferences,
       },
     });
@@ -71,7 +72,7 @@ export async function PATCH(req: NextRequest) {
 
     await connectDB();
     const userCrud = getUserCrud();
-    const user = await userCrud.updateById(session.user.id, updateData);
+    const user = await userCrud.update(session.user.id, updateData as Partial<IUser>);
 
     if (!user) {
       return NextResponse.json(

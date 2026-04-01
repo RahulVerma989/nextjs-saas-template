@@ -1,7 +1,7 @@
 import { verifyAndParseWebhook } from './dodo-client';
 import { getUserCrud } from '@/lib/db/crud/user.crud';
 import { getCreditCrud } from '@/lib/db/crud/credit.crud';
-import { PlanLimits } from '@/config/features.config';
+import { getPlanConfig } from '@/config/plans.config';
 import { generateUUID7 } from '@/lib/utils/uuid';
 import { Subscription } from '@/lib/db/models/subscription.model';
 import type { Plan } from '@/types/db.types';
@@ -12,7 +12,7 @@ export async function handleDodoWebhook(
 ): Promise<{ success: boolean; message: string }> {
   let event: { type: string; data: Record<string, unknown> };
   try {
-    event = verifyAndParseWebhook(payload, headers) as typeof event;
+    event = verifyAndParseWebhook(payload, headers) as unknown as typeof event;
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Signature verification failed';
     console.error('[Webhook] Verification failed:', msg);
@@ -89,7 +89,7 @@ async function handleSubscriptionActive(data: Record<string, unknown>) {
   if (!userId || !plan) throw new Error('Missing userId or plan in webhook metadata');
 
   const customer = data.customer as { customer_id: string } | undefined;
-  const planLimits = PlanLimits[plan];
+  const planLimits = getPlanConfig(plan);
   const userCrud = getUserCrud();
   const creditCrud = getCreditCrud();
 
@@ -133,7 +133,7 @@ async function handleSubscriptionRenewed(data: Record<string, unknown>) {
   if (!subscription) return;
 
   const creditCrud = getCreditCrud();
-  const planLimits = PlanLimits[subscription.plan];
+  const planLimits = getPlanConfig(subscription.plan as Plan);
 
   const periodStart = new Date(data.previous_billing_date as string);
   const lastAllocation = subscription.creditsAllocatedAt;
@@ -193,7 +193,7 @@ async function handleSubscriptionPlanChanged(data: Record<string, unknown>) {
   });
   if (!subscription || !newPlan || newPlan === subscription.plan) return;
 
-  const planLimits = PlanLimits[newPlan];
+  const planLimits = getPlanConfig(newPlan as Plan);
   subscription.plan = newPlan;
   subscription.monthlyCredits = planLimits.monthlyCredits;
   await subscription.save();

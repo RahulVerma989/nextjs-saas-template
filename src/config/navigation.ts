@@ -18,56 +18,71 @@ import {
 import { siteConfig } from './site.config';
 
 export interface NavItem {
-  label: string;
+  name: string;
   href: string;
   icon: LucideIcon;
-  /** Only show if the user has one of these roles */
-  roles?: string[];
 }
 
-function buildNavItems(): NavItem[] {
-  const items: NavItem[] = [
+export interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+function buildNavigationSections(): NavSection[] {
+  const mainItems: NavItem[] = [
     {
-      label: 'Dashboard',
+      name: 'Dashboard',
       href: '/dashboard',
       icon: LayoutDashboard,
     },
   ];
 
   if (siteConfig.features.billing) {
-    items.push({
-      label: 'Billing',
+    mainItems.push({
+      name: 'Billing',
       href: '/dashboard/billing',
       icon: CreditCard,
     });
   }
 
   if (siteConfig.features.apiKeys) {
-    items.push({
-      label: 'Integrations',
+    mainItems.push({
+      name: 'Integrations',
       href: '/dashboard/integrations',
       icon: Plug,
     });
   }
 
-  items.push({
-    label: 'Settings',
+  mainItems.push({
+    name: 'Settings',
     href: '/dashboard/settings',
     icon: Settings,
   });
 
-  if (siteConfig.features.adminPanel) {
-    items.push({
-      label: 'Admin',
-      href: '/dashboard/admin',
-      icon: Shield,
-      roles: ['admin'],
-    });
-  }
-
-  return items;
+  return [{ label: 'Main', items: mainItems }];
 }
 
-export const NAV_ITEMS = buildNavItems();
+function buildAdminNavigation(): NavItem[] {
+  if (!siteConfig.features.adminPanel) return [];
+
+  return [
+    {
+      name: 'Admin',
+      href: '/dashboard/admin',
+      icon: Shield,
+    },
+  ];
+}
+
+export const navigationSections = buildNavigationSections();
+export const adminNavigation = buildAdminNavigation();
 
 export const NOTIFICATION_ICON = Bell;
+
+/** Check if a nav item is active for the current pathname */
+export function isNavItemActive(pathname: string, item: NavItem): boolean {
+  if (item.href === '/dashboard') {
+    return pathname === '/dashboard';
+  }
+  return pathname.startsWith(item.href);
+}

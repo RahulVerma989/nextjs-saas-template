@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db/connection';
-import { getAPIKeyCrud } from '@/lib/db/crud/api-key';
+import { getAPIKeyCrud } from '@/lib/db/crud/api-key.crud';
 
 export async function GET() {
   try {

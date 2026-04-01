@@ -2,10 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // Use absolute URLs for /_next/static/ assets when deployed behind a
-  // reverse proxy.  In dev NEXT_PUBLIC_APP_URL is unset so Next.js
-  // falls back to relative paths.
-  assetPrefix: process.env.NEXT_PUBLIC_APP_URL || undefined,
+  // Use absolute URLs for /_next/static/ assets only in production
+  // behind a reverse proxy. In dev, relative paths work correctly.
+  assetPrefix: process.env.NODE_ENV === 'production' ? process.env.NEXT_PUBLIC_APP_URL || undefined : undefined,
   typescript: {
     ignoreBuildErrors: true,
   },

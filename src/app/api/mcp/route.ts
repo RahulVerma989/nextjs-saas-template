@@ -5,7 +5,7 @@ import { getUserCrud } from '@/lib/db/crud/user.crud';
 import { getOAuthTokenCrud } from '@/lib/db/crud/oauth.crud';
 import { executeTool, getToolDefinitions } from '@/lib/mcp/tools';
 import { checkMCPRateLimit, recordMCPSuccess } from '@/lib/mcp/rate-limiter';
-import type { Plan, MCPToolId } from '@/types/db.types';
+import type { Plan } from '@/types/db.types';
 
 interface JSONRPCRequest {
   jsonrpc: '2.0';
@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
       );
 
       if (!isError) {
-        await recordMCPSuccess(userId, apiKeyId, params.name as MCPToolId);
+        await recordMCPSuccess(userId, apiKeyId, params.name);
       }
 
       return jsonrpcSuccess(body.id, {

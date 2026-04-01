@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db/connection';
-import { Subscription } from '@/lib/db/models/Subscription';
+import { Subscription } from '@/lib/db/models/subscription.model';
 
 export async function GET() {
   try {

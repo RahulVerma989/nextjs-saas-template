@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth/admin-guard';
 import { connectDB } from '@/lib/db/connection';
-import { getUserCrud } from '@/lib/db/crud/user';
+import { getUserCrud } from '@/lib/db/crud/user.crud';
 
 export async function GET(req: NextRequest) {
   try {

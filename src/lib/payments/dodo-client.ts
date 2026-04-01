@@ -1,6 +1,6 @@
 import DodoPayments from 'dodopayments';
 import { getSecret, getSecretOptional, onSecretsRefresh } from '@/lib/secrets/secrets-manager';
-import { PlanPricing } from '@/config/plans.config';
+import { PLANS } from '@/config/plans.config';
 import type { Plan } from '@/types/db.types';
 
 let client: DodoPayments | null = null;
@@ -36,14 +36,15 @@ export async function createCheckoutSession(params: {
   plan: Exclude<Plan, 'free'>;
   returnUrl: string;
 }): Promise<{ checkoutUrl: string; sessionId: string }> {
-  const planConfig = PlanPricing[params.plan];
+  const planKey = params.plan === 'early_adopter' ? 'starter' : params.plan;
+  const planConfig = PLANS[planKey as keyof typeof PLANS];
 
-  if (!planConfig.dodoProductId) {
+  if (!planConfig?.productId) {
     throw new Error(`No Dodo product ID configured for plan: ${params.plan}`);
   }
 
   const session = await getClient().checkoutSessions.create({
-    product_cart: [{ product_id: planConfig.dodoProductId, quantity: 1 }],
+    product_cart: [{ product_id: planConfig.productId, quantity: 1 }],
     customer: { email: params.email },
     metadata: { userId: params.userId, plan: params.plan },
     return_url: params.returnUrl,

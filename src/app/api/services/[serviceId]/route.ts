@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth/auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceRegistry } from '@/lib/services/registry';
+import { getServiceRegistry } from '@/lib/services/service-registry';
 
 type RouteContext = { params: Promise<{ serviceId: string }> };
 

@@ -67,6 +67,6 @@ export function getToolDefinitions(enabledToolIds: string[]) {
     .map((tool) => ({
       name: tool.id,
       description: tool.description,
-      inputSchema: tool.inputSchema,
+      inputSchema: { type: 'object' as const, properties: {} },
     }));
 }

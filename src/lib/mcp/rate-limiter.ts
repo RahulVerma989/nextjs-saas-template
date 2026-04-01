@@ -1,9 +1,9 @@
 import { getRedisClient } from '@/lib/cache/redis-client';
 import { CacheKeys } from '@/lib/cache/keys';
-import { MCP_RATE_LIMITS, type RateLimitConfig } from '@/config/mcp-tools.config';
+import { MCP_RATE_LIMITS } from '@/config/mcp-tools.config';
 import { UsageLog } from '@/lib/db/models/usage-log.model';
 import { generateUUID7 } from '@/lib/utils/uuid';
-import type { Plan, MCPToolId } from '@/types/db.types';
+import type { Plan } from '@/types/db.types';
 
 export interface MCPRateLimitResult {
   allowed: boolean;
@@ -78,7 +78,7 @@ export async function checkMCPRateLimit(
 export async function recordMCPSuccess(
   userId: string,
   apiKeyId: string,
-  toolId: MCPToolId
+  toolId: string
 ): Promise<void> {
   const redis = getRedisClient();
   const redisKey = CacheKeys.mcpRateLimit(userId);
@@ -161,7 +161,7 @@ async function recoverFromDB(
 async function checkBurstLimit(
   redis: ReturnType<typeof getRedisClient>,
   userId: string,
-  config: RateLimitConfig
+  config: { perWindow: number; perMinute: number; windowMs: number }
 ): Promise<boolean> {
   const burstKey = `${CacheKeys.mcpRateLimit(userId)}:burst`;
   const now = Date.now();
@@ -177,7 +177,7 @@ async function checkBurstLimit(
 async function persistToDB(
   userId: string,
   apiKeyId: string,
-  toolId: MCPToolId,
+  toolId: string,
   windowDate: string
 ): Promise<void> {
   await UsageLog.findOneAndUpdate(

@@ -1,5 +1,5 @@
-import { getServiceRegistry } from '../registry/service-registry';
-import type { ServiceContext } from '../registry/service-registry';
+import { getServiceRegistry } from '../service-registry';
+import type { ServiceContext } from '../service-registry';
 
 /**
  * Example background service definition.

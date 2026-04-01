@@ -1,4 +1,4 @@
-import type { Document } from 'mongoose';
+type DocBase = { _id: string };
 
 // ─── Plans & Roles ──────────────────────────────────────────
 
@@ -8,7 +8,7 @@ export type AccountStatus = 'pending' | 'pending_review' | 'approved' | 'rejecte
 
 // ─── User ───────────────────────────────────────────────────
 
-export interface IUser extends Document {
+export interface IUser extends DocBase {
   _id: string;
   email: string;
   name: string;
@@ -46,9 +46,9 @@ export interface IUser extends Document {
 
 // ─── Subscription ───────────────────────────────────────────
 
-export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'paused';
+export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'canceling' | 'paused';
 
-export interface ISubscription extends Document {
+export interface ISubscription extends DocBase {
   _id: string;
   userId: string;
   dodoSubscriptionId: string;
@@ -58,6 +58,7 @@ export interface ISubscription extends Document {
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
   cancelAtPeriodEnd: boolean;
+  cancelAt?: Date;
   monthlyCredits: number;
   creditsAllocatedAt?: Date;
   planHistory: {
@@ -84,7 +85,7 @@ export type CreditSource =
   | 'refund'
   | 'admin_adjustment';
 
-export interface ICreditTransaction extends Document {
+export interface ICreditTransaction extends DocBase {
   _id: string;
   userId: string;
   type: CreditTransactionType;
@@ -101,7 +102,7 @@ export interface ICreditTransaction extends Document {
 
 // ─── API Key ────────────────────────────────────────────────
 
-export interface IAPIKey extends Document {
+export interface IAPIKey extends DocBase {
   _id: string;
   userId: string;
   name: string;
@@ -126,7 +127,7 @@ export type NotificationType =
   | 'feedback_submitted'
   | 'feedback_status_changed';
 
-export interface INotification extends Document {
+export interface INotification extends DocBase {
   _id: string;
   userId: string;
   type: NotificationType;
@@ -141,7 +142,7 @@ export interface INotification extends Document {
 
 // ─── Usage Log ──────────────────────────────────────────────
 
-export interface IUsageLog extends Document {
+export interface IUsageLog extends DocBase {
   _id: string;
   userId: string;
   apiKeyId: string;
@@ -155,7 +156,7 @@ export interface IUsageLog extends Document {
 
 // ─── OAuth ──────────────────────────────────────────────────
 
-export interface IOAuthClient extends Document {
+export interface IOAuthClient extends DocBase {
   _id: string;
   clientSecret?: string;
   clientName: string;
@@ -167,7 +168,7 @@ export interface IOAuthClient extends Document {
   updatedAt: Date;
 }
 
-export interface IOAuthCode extends Document {
+export interface IOAuthCode extends DocBase {
   _id: string;
   codeHash: string;
   clientId: string;
@@ -181,7 +182,7 @@ export interface IOAuthCode extends Document {
   createdAt: Date;
 }
 
-export interface IOAuthToken extends Document {
+export interface IOAuthToken extends DocBase {
   _id: string;
   tokenHash: string;
   refreshTokenHash?: string;
@@ -196,12 +197,13 @@ export interface IOAuthToken extends Document {
 
 // ─── Service Run (Background Services) ─────────────────────
 
-export type ServiceRunStatus = 'running' | 'completed' | 'failed';
+export type ServiceRunStatus = 'pending' | 'running' | 'completed' | 'failed';
 export type ServiceTrigger = 'schedule' | 'cron' | 'api' | 'manual';
 
-export interface IServiceRun extends Document {
+export interface IServiceRun extends DocBase {
   _id: string;
   serviceName: string;
+  serviceId?: string;
   status: ServiceRunStatus;
   startedAt: Date;
   completedAt?: Date;
@@ -210,6 +212,7 @@ export interface IServiceRun extends Document {
   error?: string;
   triggeredBy: ServiceTrigger;
   workerId: string;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }

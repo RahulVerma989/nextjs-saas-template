@@ -43,7 +43,7 @@ export class CreditCrud extends BaseCrud<ICreditTransaction> {
     }
 
     let newCreditBalance = user.creditBalance;
-    let newWalletBalance = (user as Record<string, unknown>).walletBalance as number ?? 0;
+    let newWalletBalance = user.walletBalance ?? 0;
 
     if (data.type === 'credit') {
       if (data.source === 'wallet_topup') {
@@ -192,7 +192,7 @@ export class CreditCrud extends BaseCrud<ICreditTransaction> {
 
   async canAfford(userId: string, amount: number): Promise<boolean> {
     const user = await User.findById(userId).select('creditBalance walletBalance').lean();
-    const total = (user?.creditBalance ?? 0) + ((user as Record<string, unknown>)?.walletBalance as number ?? 0);
+    const total = (user?.creditBalance ?? 0) + (user?.walletBalance ?? 0);
     return total >= amount;
   }
 
@@ -202,7 +202,7 @@ export class CreditCrud extends BaseCrud<ICreditTransaction> {
       cacheKey,
       async () => {
         const user = await User.findById(userId).select('creditBalance walletBalance').lean();
-        return (user?.creditBalance ?? 0) + ((user as Record<string, unknown>)?.walletBalance as number ?? 0);
+        return (user?.creditBalance ?? 0) + (user?.walletBalance ?? 0);
       },
       CacheTTL.userCredits
     );

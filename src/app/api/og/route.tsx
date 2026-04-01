@@ -23,14 +23,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const image = await renderOGImage(pageData);
-
-    return new Response(image, {
-      headers: {
-        'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=86400, s-maxage=86400',
-      },
-    });
+    return renderOGImage(pageData);
   } catch (error) {
     console.error('GET /api/og error:', error);
     return NextResponse.json(

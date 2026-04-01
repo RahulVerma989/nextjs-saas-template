@@ -10,15 +10,10 @@ export interface ServiceDefinition {
   id: string;
   name: string;
   description: string;
-  /** Cron expression for scheduled execution (e.g., '*/5 * * * *' for every 5 min) */
   schedule?: string;
-  /** Whether to allow concurrent runs of this service */
   allowConcurrent?: boolean;
-  /** Lock TTL in seconds (default: 300) */
   lockTTL?: number;
-  /** The actual service handler */
   handler: (context: ServiceContext) => Promise<unknown>;
-  /** Whether the service is enabled */
   enabled?: boolean;
 }
 
@@ -201,9 +196,9 @@ class ServiceRegistry {
   }
 
   /**
-   * Simple cron-to-ms conversion for common patterns
-   * Supports: seconds-based (*/N * * * * *) and minutes-based (*/N * * * *)
-   * For complex cron, use Agenda.js instead
+   * Simple cron-to-ms conversion for common patterns.
+   * Supports seconds-based and minutes-based interval patterns.
+   * For complex cron, use Agenda.js instead.
    */
   private cronToMs(cron: string): number | null {
     const parts = cron.trim().split(/\s+/);

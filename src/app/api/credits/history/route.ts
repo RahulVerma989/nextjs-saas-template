@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db/connection';
-import { getCreditCrud } from '@/lib/db/crud/credit';
+import { getCreditCrud } from '@/lib/db/crud/credit.crud';
 
 export async function GET(req: NextRequest) {
   try {

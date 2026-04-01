@@ -4,7 +4,7 @@ import { BaseCrud } from './base.crud';
 import { CacheKeys, CacheTTL } from '@/lib/cache/keys';
 import { generateUUID7 } from '@/lib/utils/uuid';
 import crypto from 'crypto';
-import type { IAPIKey, MCPToolId } from '@/types/db.types';
+import type { IAPIKey } from '@/types/db.types';
 
 const API_KEY_PREFIX = 'sk_';
 
@@ -34,7 +34,7 @@ export class APIKeyCrud extends BaseCrud<IAPIKey> {
   async createKey(
     userId: string,
     name: string,
-    enabledTools: MCPToolId[]
+    enabledTools: string[]
   ): Promise<{ apiKey: IAPIKey; rawKey: string }> {
     const { rawKey, keyHash, keyPrefix } = this.generateKey();
 
@@ -109,7 +109,7 @@ export class APIKeyCrud extends BaseCrud<IAPIKey> {
   async updateTools(
     keyId: string,
     userId: string,
-    enabledTools: MCPToolId[]
+    enabledTools: string[]
   ): Promise<IAPIKey | null> {
     await this.ensureConnection();
     const key = await this.model.findOneAndUpdate(

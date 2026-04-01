@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth/admin-guard';
 import { connectDB } from '@/lib/db/connection';
-import { getUserCrud } from '@/lib/db/crud/user';
+import { getUserCrud } from '@/lib/db/crud/user.crud';
+import type { IUser } from '@/types/db.types';
 
 type RouteContext = { params: Promise<{ userId: string }> };
 
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     await connectDB();
     const userCrud = getUserCrud();
-    const user = await userCrud.getById(userId);
+    const user = await userCrud.findById(userId);
 
     if (!user) {
       return NextResponse.json(
@@ -59,7 +60,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     await connectDB();
     const userCrud = getUserCrud();
-    const user = await userCrud.updateById(userId, updateData);
+    const user = await userCrud.update(userId, updateData as Partial<IUser>);
 
     if (!user) {
       return NextResponse.json(

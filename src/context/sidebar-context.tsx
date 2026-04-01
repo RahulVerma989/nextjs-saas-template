@@ -4,12 +4,12 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useState,
 } from 'react';
 
 interface SidebarContextValue {
   isOpen: boolean;
+  collapsed: boolean;
   toggle: () => void;
   open: () => void;
   close: () => void;
@@ -20,14 +20,11 @@ const SidebarContext = createContext<SidebarContextValue | undefined>(undefined)
 const STORAGE_KEY = 'sidebar-open';
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(true);
-
-  useEffect(() => {
+  const [isOpen, setIsOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored !== null) {
-      setIsOpen(stored === 'true');
-    }
-  }, []);
+    return stored !== null ? stored === 'true' : true;
+  });
 
   const persist = useCallback((value: boolean) => {
     setIsOpen(value);
@@ -42,7 +39,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const close = useCallback(() => persist(false), [persist]);
 
   return (
-    <SidebarContext.Provider value={{ isOpen, toggle, open, close }}>
+    <SidebarContext.Provider value={{ isOpen, collapsed: !isOpen, toggle, open, close }}>
       {children}
     </SidebarContext.Provider>
   );

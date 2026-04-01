@@ -4,6 +4,8 @@ import { useSession } from 'next-auth/react';
 import { useState } from 'react';
 import { PLANS } from '@/config/plans.config';
 
+const plansList = Object.entries(PLANS).map(([id, plan]) => ({ id, ...plan }));
+
 export default function BillingPage() {
   const { data: session } = useSession();
   const [loading, setLoading] = useState<string | null>(null);
@@ -35,7 +37,7 @@ export default function BillingPage() {
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {PLANS.map((plan) => (
+        {plansList.map((plan) => (
           <div
             key={plan.id}
             className={`rounded-xl border bg-card p-6 ${plan.popular ? 'border-primary ring-1 ring-primary' : 'border-border'}`}

@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db/connection';
-import { getAPIKeyCrud } from '@/lib/db/crud/api-key';
+import { getAPIKeyCrud } from '@/lib/db/crud/api-key.crud';
 
 type RouteContext = { params: Promise<{ keyId: string }> };
 
@@ -19,7 +19,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
 
     await connectDB();
     const apiKeyCrud = getAPIKeyCrud();
-    const key = await apiKeyCrud.revoke(keyId, session.user.id);
+    const key = await apiKeyCrud.revokeKey(keyId, session.user.id);
 
     if (!key) {
       return NextResponse.json(
@@ -64,7 +64,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     await connectDB();
     const apiKeyCrud = getAPIKeyCrud();
-    const key = await apiKeyCrud.updateEnabledTools(keyId, session.user.id, enabledTools);
+    const key = await apiKeyCrud.updateTools(keyId, session.user.id, enabledTools);
 
     if (!key) {
       return NextResponse.json(
