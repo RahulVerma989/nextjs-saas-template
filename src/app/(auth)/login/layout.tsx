@@ -1,5 +1,6 @@
+import { redirect } from 'next/navigation';
 import { siteConfig } from '@/config/site.config';
-import { requireFeature } from '@/lib/features/gate';
+import { isFeatureEnabled } from '@/lib/features/gate';
 
 export const metadata = {
   title: 'Sign In',
@@ -12,6 +13,8 @@ export const metadata = {
 };
 
 export default function LoginLayout({ children }: { children: React.ReactNode }) {
-  requireFeature('auth');
+  if (!isFeatureEnabled('auth')) {
+    redirect('/');
+  }
   return children;
 }

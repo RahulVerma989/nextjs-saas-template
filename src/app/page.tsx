@@ -44,7 +44,6 @@ import {
   X,
   ChevronRight,
   Rocket,
-  Quote,
 } from 'lucide-react';
 
 // ── Pain Points (arithmetic hours) ─────────────────────────────────
@@ -195,53 +194,6 @@ const techStack = [
   { name: 'Redis', icon: Zap },
   { name: 'NextAuth v5', icon: Lock },
   { name: 'shadcn/ui', icon: Layers },
-];
-
-// ── Testimonials (customize with your own) ─────────────────────────
-
-const testimonials = [
-  {
-    name: 'Alex Chen',
-    role: 'Indie Hacker',
-    content:
-      'Shipped my SaaS MVP in a weekend. Auth, billing, and dashboard were already there — I just added my business logic.',
-    initials: 'AC',
-  },
-  {
-    name: 'Sarah Kim',
-    role: 'Full-Stack Developer',
-    content:
-      "The best Next.js template I've used. Everything is production-ready from day one. Saved me at least 200 hours of boilerplate.",
-    initials: 'SK',
-  },
-  {
-    name: 'James Wilson',
-    role: 'Startup Founder',
-    content:
-      'We went from idea to paying customers in under a week. The MCP integration was a game-changer for our AI product.',
-    initials: 'JW',
-  },
-  {
-    name: 'Maria Garcia',
-    role: 'Software Engineer',
-    content:
-      "Clean, well-typed code that's easy to extend. AI tools like Claude and Cursor understand the codebase perfectly.",
-    initials: 'MG',
-  },
-  {
-    name: 'David Park',
-    role: 'Solo Founder',
-    content:
-      "I've tried 5 different SaaS templates. This is the only one where everything actually works together out of the box.",
-    initials: 'DP',
-  },
-  {
-    name: 'Emma Thompson',
-    role: 'Product Engineer',
-    content:
-      'The credit system and API key management saved us weeks. My team focused on our core product from day one.',
-    initials: 'ET',
-  },
 ];
 
 // ── FAQ ────────────────────────────────────────────────────────────
@@ -723,63 +675,19 @@ export default async function LandingPage() {
 
       <Separator />
 
-      {/* ── Testimonials ────────────────────────────────── */}
-      <section className="py-16 sm:py-24">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <Badge variant="outline" className="mb-4">
-              <Star className="mr-1.5 h-3 w-3" /> What Developers Say
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              Loved by developers who ship fast
-            </h2>
-            <p className="mt-3 text-muted-foreground">
-              Join developers who stopped rebuilding infrastructure and started launching products.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {testimonials.map((t) => (
-              <Card
-                key={t.name}
-                className="hover:shadow-md transition-shadow duration-200"
-              >
-                <CardContent className="pt-6">
-                  <Quote className="h-7 w-7 text-primary/20 mb-3" />
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-                    &ldquo;{t.content}&rdquo;
-                  </p>
-                  <Separator className="mb-4" />
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                      {t.initials}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{t.name}</p>
-                      <p className="text-xs text-muted-foreground">{t.role}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <Separator />
-
-      {/* ── Pricing (only when auth is enabled) ──────── */}
-      {authEnabled && <section id="pricing" className="py-16 sm:py-24 bg-muted/30">
+      {/* ── Pricing ─────────────────────────────────────── */}
+      <section id="pricing" className="py-16 sm:py-24 bg-muted/30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-14">
             <Badge variant="outline" className="mb-4">
-              Pricing
+              <CreditCard className="mr-1.5 h-3 w-3" /> Built-In Billing
             </Badge>
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              Start free, scale as you grow
+              Pricing plans, <span className="text-primary">ready to use</span>
             </h2>
             <p className="mt-3 text-muted-foreground">
-              No hidden fees. Upgrade or downgrade anytime.
+              Pre-configured subscription tiers with Dodo Payments integration.
+              Customize plans, prices, and features in a single config file.
             </p>
           </div>
 
@@ -829,8 +737,13 @@ export default async function LandingPage() {
               </Card>
             ))}
           </div>
+
+          <p className="text-center text-xs text-muted-foreground mt-8">
+            These are example plans from <code className="bg-muted px-1.5 py-0.5 rounded text-[11px]">plans.config.ts</code>. Customize
+            names, prices, and features to match your product.
+          </p>
         </div>
-      </section>}
+      </section>
 
       <Separator />
 

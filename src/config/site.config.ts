@@ -45,7 +45,7 @@ export const siteConfig = {
     /** Enable the update notification system */
     enabled: true,
     /** GitHub repo to check for releases (owner/repo format) */
-    repo: '',   // e.g. 'yourorg/launchkit'
+    repo: 'RahulVerma989/nextjs-saas-template',   // e.g. 'yourorg/launchkit'
     /** Current version of this deployment */
     version: '1.0.0',
   },
