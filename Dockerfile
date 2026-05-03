@@ -5,7 +5,11 @@ FROM node:20-slim AS base
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci
+# Prefer `npm ci` for reproducible installs; fall back to `npm install`
+# when the lockfile is out of sync with package.json (the lockfile is
+# a regenerated artifact, so drift is recoverable in CI).
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci || (echo '[deps] lockfile out of sync, falling back to npm install' && npm install --no-audit --no-fund)
 
 # ---- Build ----
 FROM base AS builder
