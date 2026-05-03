@@ -24,32 +24,36 @@ export const size = {
 };
 export const contentType = 'image/png';
 
+/**
+ * Build the brand icon as a base64 data URL so we can render it via
+ * `<img>` inside Satori (next/og's renderer).  Rendering SVG
+ * `<path>`/`<circle>` children directly inside a JSX `<svg>` causes
+ * Satori to emit "Cannot convert a Symbol value to a string" — the
+ * data-URL `<img>` path avoids React Fragment / array-children
+ * limitations entirely.
+ */
+function buildBrandIconDataUrl(): string | null {
+  if (siteConfig.brandIcon.type !== 'lucide') return null;
+  const data = LUCIDE_PATHS[siteConfig.brandIcon.name];
+  if (!data) return null;
+
+  const viewBox = data.viewBox ?? '0 0 24 24';
+  const paths = data.paths.map((d) => `<path d="${d}"/>`).join('');
+  const circles = (data.circles ?? [])
+    .map((c) => `<circle cx="${c.cx}" cy="${c.cy}" r="${c.r}"/>`)
+    .join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}${circles}</svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+}
+
 export default function TwitterImage() {
   const primary = siteConfig.theme.primaryColor;
   const accent = siteConfig.theme.accentColor;
   const bgFrom = siteConfig.seo.ogBackground.from;
   const bgTo = siteConfig.seo.ogBackground.to;
 
-  // Resolve the brand icon SVG body (lucide name → path data) so it
-  // renders inside Satori, which doesn't support lucide-react.
-  let iconChildren: React.ReactNode = null;
-  let iconViewBox = '0 0 24 24';
-  if (siteConfig.brandIcon.type === 'lucide') {
-    const data = LUCIDE_PATHS[siteConfig.brandIcon.name];
-    if (data) {
-      iconViewBox = data.viewBox ?? '0 0 24 24';
-      iconChildren = (
-        <>
-          {data.paths.map((d, i) => (
-            <path key={`p-${i}`} d={d} />
-          ))}
-          {(data.circles ?? []).map((c, i) => (
-            <circle key={`c-${i}`} cx={c.cx} cy={c.cy} r={c.r} />
-          ))}
-        </>
-      );
-    }
-  }
+  const iconDataUrl = buildBrandIconDataUrl();
+  const initial = siteConfig.name.charAt(0);
 
   return new ImageResponse(
     (
@@ -91,19 +95,9 @@ export default function TwitterImage() {
               borderRadius: 16,
             }}
           >
-            {iconChildren ? (
-              <svg
-                width="32"
-                height="32"
-                viewBox={iconViewBox}
-                fill="none"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                {iconChildren}
-              </svg>
+            {iconDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={iconDataUrl} alt="" width={32} height={32} />
             ) : (
               <span
                 style={{
@@ -112,7 +106,7 @@ export default function TwitterImage() {
                   color: 'white',
                 }}
               >
-                {siteConfig.name.charAt(0)}
+                {initial}
               </span>
             )}
           </div>
