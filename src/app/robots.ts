@@ -1,12 +1,8 @@
 import type { MetadataRoute } from 'next';
-import { getSiteUrl } from '@/lib/utils/site-url';
+import { siteConfig } from '@/config/site.config';
 
-// `headers()` inside getSiteUrl() opts this route into dynamic rendering,
-// so the URL always reflects the actual request host.
-export const dynamic = 'force-dynamic';
-
-export default async function robots(): Promise<MetadataRoute.Robots> {
-  const baseUrl = await getSiteUrl();
+export default function robots(): MetadataRoute.Robots {
+  const baseUrl = siteConfig.url;
 
   return {
     rules: [
