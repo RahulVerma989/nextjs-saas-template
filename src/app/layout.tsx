@@ -1,9 +1,20 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import { siteConfig } from '@/config/site.config';
+import { ThemeProvider } from '@/context/theme-context';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
+// Geist + Geist Mono — pairs with the OKLCH theme.  --font-sans /
+// --font-mono are the variable names referenced by globals.css so
+// Tailwind's `font-sans` / `font-mono` utilities Just Work.
+const geistSans = Geist({
+  variable: '--font-sans',
+  subsets: ['latin'],
+});
+const geistMono = Geist_Mono({
+  variable: '--font-mono',
+  subsets: ['latin'],
+});
 
 export const metadata: Metadata = {
   title: {
@@ -118,7 +129,9 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/site.webmanifest" />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }
