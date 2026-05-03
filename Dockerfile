@@ -18,7 +18,13 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS="--max-old-space-size=2048"
-ARG NEXT_PUBLIC_APP_URL
+# Set at build time so next.config.ts assetPrefix and the metadataBase
+# in src/app/layout.tsx resolve to the production URL.  Override per
+# deploy via `--build-arg NEXT_PUBLIC_APP_URL=https://your.domain` (or
+# in Dokploy's Build Arguments panel).  NEXT_PUBLIC_* vars are inlined
+# into the JS bundle at build time — runtime env vars / Infisical
+# cannot change them after the build.
+ARG NEXT_PUBLIC_APP_URL=https://template.rahulverma.cc
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 RUN --mount=type=cache,target=/app/.next/cache npm run build
 RUN npm prune --omit=dev
