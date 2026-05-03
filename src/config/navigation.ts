@@ -13,6 +13,7 @@ import {
   Plug,
   Shield,
   Bell,
+  Search,
   type LucideIcon,
 } from 'lucide-react';
 import { siteConfig } from './site.config';
@@ -63,15 +64,28 @@ function buildNavigationSections(): NavSection[] {
 }
 
 function buildAdminNavigation(): NavItem[] {
-  if (!siteConfig.features.adminPanel) return [];
+  const items: NavItem[] = [];
 
-  return [
-    {
+  if (siteConfig.features.adminPanel) {
+    items.push({
       name: 'Admin',
       href: '/dashboard/admin',
       icon: Shield,
-    },
-  ];
+    });
+  }
+
+  // SEO settings — admin-only, only when GSC indexing is enabled.
+  // Lives under settings (`/dashboard/settings/seo`) but surfaced in
+  // the admin section so non-admins don't see a dead-end link.
+  if (siteConfig.features.gscIndexing) {
+    items.push({
+      name: 'SEO',
+      href: '/dashboard/settings/seo',
+      icon: Search,
+    });
+  }
+
+  return items;
 }
 
 export const navigationSections = buildNavigationSections();

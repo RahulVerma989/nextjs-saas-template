@@ -87,6 +87,7 @@ export const siteConfig = {
   //   notifications      auth
   //   fileUploads        auth
   //   waitlist           (MongoDB must be configured)
+  //   gscIndexing        auth, backgroundServices
   //
   features: {
     /** Master switch — disabling removes login, dashboard, and all auth-dependent features */
@@ -102,6 +103,24 @@ export const siteConfig = {
     apiKeys: true,
     notifications: true,
     darkMode: true,
+    /** Auto-submit marketing pages to Google Search Console when their content changes */
+    gscIndexing: true,
+  },
+
+  // ─── SEO ──────────────────────────────────────────────────
+  seo: {
+    /** Twitter handle for twitter:site / twitter:creator (e.g. '@yourhandle') */
+    twitterHandle: '',
+    /** Default OG image dimensions */
+    ogImage: {
+      width: 1200,
+      height: 630,
+    },
+    /** Background gradient stops for the auto-generated OG image */
+    ogBackground: {
+      from: '#ffffff',
+      to: '#f1f5f9',
+    },
   },
 
   // ─── Admin ────────────────────────────────────────────────
