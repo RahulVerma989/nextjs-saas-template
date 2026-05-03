@@ -1,86 +1,58 @@
 'use client';
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from 'react';
+/**
+ * Theme system — thin wrapper around `next-themes`.
+ *
+ * Why a wrapper:
+ *   - next-themes is the source of truth (battle-tested SSR, system
+ *     preference tracking, no flicker).
+ *   - We expose a `toggleTheme()` helper so existing call sites that
+ *     used the old context hook keep working with one less prop wired
+ *     through.
+ *   - All components (landing + dashboard) read theme from the same
+ *     provider mounted in the root layout, so the toggle never goes
+ *     out of sync with the .dark class.
+ */
 
-type Theme = 'light' | 'dark' | 'system';
-
-interface ThemeContextValue {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
-  toggleTheme: () => void;
-}
-
-const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
-
-const STORAGE_KEY = 'theme';
-
-function getSystemTheme(): 'light' | 'dark' {
-  if (typeof window === 'undefined') return 'light';
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light';
-}
-
-function applyTheme(theme: Theme) {
-  const resolved = theme === 'system' ? getSystemTheme() : theme;
-  if (resolved === 'dark') {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-  }
-}
+import { ThemeProvider as NextThemesProvider } from 'next-themes';
+import { useTheme as useNextTheme } from 'next-themes';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === 'undefined') return 'system';
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    return (stored && ['light', 'dark', 'system'].includes(stored)) ? stored : 'system';
-  });
-
-  useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = () => {
-      if (theme === 'system') {
-        applyTheme('system');
-      }
-    };
-    mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
-  }, [theme]);
-
-  const setTheme = useCallback((newTheme: Theme) => {
-    setThemeState(newTheme);
-    localStorage.setItem(STORAGE_KEY, newTheme);
-    applyTheme(newTheme);
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    const resolved = theme === 'system' ? getSystemTheme() : theme;
-    const next = resolved === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-  }, [theme, setTheme]);
-
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <NextThemesProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      // Disable transitions on theme flip to avoid jarring color jumps
+      // across the whole tree (we'd rather the toggle feel instant).
+      disableTransitionOnChange
+    >
       {children}
-    </ThemeContext.Provider>
+    </NextThemesProvider>
   );
 }
 
-export function useTheme(): ThemeContextValue {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
+/**
+ * Theme hook compatible with the old ThemeContext API.
+ *
+ * Returns:
+ *   - `theme`           — what the user explicitly chose ('light' | 'dark' | 'system')
+ *   - `resolvedTheme`   — what's actually applied right now ('light' | 'dark')
+ *   - `setTheme(theme)` — set explicit choice
+ *   - `toggleTheme()`   — flip between light and dark (resolves 'system' first)
+ */
+export function useTheme() {
+  const { theme, setTheme, resolvedTheme, systemTheme } = useNextTheme();
+
+  const toggleTheme = () => {
+    const current = resolvedTheme ?? systemTheme ?? theme ?? 'light';
+    setTheme(current === 'dark' ? 'light' : 'dark');
+  };
+
+  return {
+    theme: (theme ?? 'system') as 'light' | 'dark' | 'system',
+    resolvedTheme: (resolvedTheme ?? 'light') as 'light' | 'dark',
+    setTheme,
+    toggleTheme,
+  };
 }

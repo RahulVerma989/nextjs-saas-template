@@ -22,12 +22,16 @@ export const siteConfig = {
    * Option 3 — Inline SVG path data (for simple icons):
    *   brandIcon: { type: 'svg-inline', d: 'M12 2L2 22h20L12 2z', viewBox: '0 0 24 24' }
    */
-  brandIcon: { type: 'lucide' as const, name: 'Rocket' },
+  brandIcon: { type: 'lucide' as const, name: 'Layers' },
 
   // ─── Theme ────────────────────────────────────────────────
+  // Hex equivalents of the OKLCH tokens in src/app/globals.css.
+  // The brand-asset generator and OG/Twitter images consume hex,
+  // while runtime CSS uses the OKLCH source of truth.  Update both
+  // sides together when re-skinning.
   theme: {
-    primaryColor: '#6366f1',   // Indigo-500
-    accentColor: '#8b5cf6',    // Violet-500
+    primaryColor: '#c2703e',   // ~ oklch(0.62 0.14 39.15) — warm copper
+    accentColor: '#d4915f',    // ~ oklch(0.72 0.10 50)    — lighter copper
   },
 
   // ─── Social / Links ───────────────────────────────────────
