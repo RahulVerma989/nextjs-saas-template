@@ -44,6 +44,7 @@ import {
   X,
   ChevronRight,
   Rocket,
+  Search,
 } from 'lucide-react';
 
 // ── Pain Points (arithmetic hours) ─────────────────────────────────
@@ -58,6 +59,8 @@ const painPoints = [
   { icon: Database, task: 'Database, Redis & caching layer', hours: 3 },
   { icon: HardDrive, task: 'File storage & uploads', hours: 2 },
   { icon: Image, task: 'SEO, OG images & metadata', hours: 2 },
+  { icon: Search, task: 'Google Search Console + Indexing API integration', hours: 4 },
+  { icon: Palette, task: 'Brand asset pipeline (favicons, manifest, OG)', hours: 2 },
 ];
 
 const totalHours = painPoints.reduce((sum, p) => sum + p.hours, 0);
@@ -131,11 +134,27 @@ const features = [
   },
   {
     icon: Image,
-    title: 'Dynamic OG Images',
+    title: 'OG / Twitter Images',
     description:
-      'Auto-generated Open Graph images with Satori. Customizable templates, edge-cached, SEO-ready out of the box.',
+      'Static OG + Twitter cards pre-rendered at build time from siteConfig. Twitter’s 5s bot timeout never drops them, and the brand auto-applies.',
     color: 'text-indigo-500',
     bg: 'bg-indigo-500/10',
+  },
+  {
+    icon: Search,
+    title: 'Auto SEO Indexing (GSC)',
+    description:
+      'Connect Google Search Console once — the worker hashes every marketing route and submits URL_UPDATED to the Indexing API on every deploy.',
+    color: 'text-rose-500',
+    bg: 'bg-rose-500/10',
+  },
+  {
+    icon: Palette,
+    title: 'Auto Brand Assets',
+    description:
+      'favicon.ico, .svg, all PNG sizes, apple-touch-icon and site.webmanifest are auto-generated from siteConfig on every build. Change one color, the favicons update.',
+    color: 'text-cyan-500',
+    bg: 'bg-cyan-500/10',
   },
 ];
 
@@ -152,6 +171,8 @@ const comparison = [
   { component: 'Redis + Caching + Locking', diy: '3–5 hrs' },
   { component: 'MCP Protocol Endpoint', diy: '8–12 hrs' },
   { component: 'OG Images + SEO + Sitemap', diy: '2–4 hrs' },
+  { component: 'GSC Auto-Indexing + Page Manifest', diy: '4–6 hrs' },
+  { component: 'Brand Asset Pipeline (favicons + manifest)', diy: '2–3 hrs' },
 ];
 
 // ── AI Section ─────────────────────────────────────────────────────
@@ -287,10 +308,10 @@ export default async function LandingPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* ── Navbar ──────────────────────────────────────── */}
+      {/* ── Navbar ───────────────────────────────────────── */}
       <Navbar links={navLinks} isLoggedIn={isLoggedIn} />
 
-      {/* ── Hero ────────────────────────────────────────── */}
+      {/* ── Hero ─────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(99,102,241,0.12),transparent)]" />
 
@@ -489,7 +510,7 @@ export default async function LandingPage() {
               What&apos;s Included
             </Badge>
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              9 production systems, ready to go
+              {features.length} production systems, ready to go
             </h2>
             <p className="mt-3 text-muted-foreground">
               Each module is built, tested, and documented. Use what you need, disable what you
@@ -532,7 +553,7 @@ export default async function LandingPage() {
               Build vs. Buy
             </Badge>
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              50–80 hours of work, or <span className="text-primary">5 minutes</span>
+              {totalHours}+ hours of work, or <span className="text-primary">5 minutes</span>
             </h2>
             <p className="mt-3 text-muted-foreground">
               Every component is built, tested, and integrated. Here&apos;s what you&apos;d spend
@@ -570,7 +591,7 @@ export default async function LandingPage() {
               {/* Total */}
               <div className="grid grid-cols-[1fr_auto_auto] sm:grid-cols-3 px-4 sm:px-6 py-3.5 text-sm font-bold border-t-2 border-border bg-muted/40">
                 <span>Total</span>
-                <span className="text-center text-destructive px-2">50–80 hrs</span>
+                <span className="text-center text-destructive px-2">{totalHours}+ hrs</span>
                 <span className="text-center text-primary px-2">~5 min</span>
               </div>
             </div>
@@ -580,7 +601,7 @@ export default async function LandingPage() {
 
       <Separator />
 
-      {/* ── AI-Friendly Architecture ────────────────────── */}
+      {/* ── AI-Friendly Architecture ─────────────────────── */}
       <section id="ai" className="py-16 sm:py-24">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-14">
@@ -620,7 +641,7 @@ export default async function LandingPage() {
 
       <Separator />
 
-      {/* ── How It Works ────────────────────────────────── */}
+      {/* ── How It Works ─────────────────────────────────── */}
       <section className="py-16 sm:py-24 bg-muted/30">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-14">
@@ -675,7 +696,7 @@ export default async function LandingPage() {
 
       <Separator />
 
-      {/* ── Pricing ─────────────────────────────────────── */}
+      {/* ── Pricing ──────────────────────────────────────── */}
       <section id="pricing" className="py-16 sm:py-24 bg-muted/30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-14">
@@ -747,7 +768,7 @@ export default async function LandingPage() {
 
       <Separator />
 
-      {/* ── FAQ ─────────────────────────────────────────── */}
+      {/* ── FAQ ──────────────────────────────────────────── */}
       <section id="faq" className="py-16 sm:py-24">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-12">
@@ -777,7 +798,7 @@ export default async function LandingPage() {
 
       <Separator />
 
-      {/* ── Final CTA ───────────────────────────────────── */}
+      {/* ── Final CTA ────────────────────────────────────── */}
       <section className="py-16 sm:py-24 bg-muted/30">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="rounded-2xl bg-primary px-6 py-12 sm:px-12 sm:py-16 text-center relative overflow-hidden">
@@ -812,7 +833,7 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* ── Footer ──────────────────────────────────────── */}
+      {/* ── Footer ───────────────────────────────────────── */}
       <footer className="border-t border-border bg-muted/30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
