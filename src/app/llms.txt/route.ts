@@ -1,6 +1,9 @@
 import { siteConfig } from '@/config/site.config';
+import { getSiteUrl } from '@/lib/utils/site-url';
 
 export const runtime = 'nodejs';
+// Reads the request host so the URL stays correct across deployments.
+export const dynamic = 'force-dynamic';
 
 /**
  * /llms.txt — points LLM crawlers (ChatGPT, Claude, Perplexity, etc.)
@@ -10,7 +13,7 @@ export const runtime = 'nodejs';
  * Customize the body below as you add public APIs / docs.
  */
 export async function GET() {
-  const baseUrl = siteConfig.url;
+  const baseUrl = await getSiteUrl();
 
   const body = `# ${siteConfig.name}
 

@@ -1,5 +1,9 @@
 import type { MetadataRoute } from 'next';
 import { siteConfig } from '@/config/site.config';
+import { getSiteUrl } from '@/lib/utils/site-url';
+
+// `headers()` inside getSiteUrl() opts this route into dynamic rendering.
+export const dynamic = 'force-dynamic';
 
 /**
  * Main sitemap.  Add your own marketing routes (tools, comparisons,
@@ -10,8 +14,8 @@ import { siteConfig } from '@/config/site.config';
  * If you split sitemaps later (e.g. /blog/sitemap.xml), make sure to
  * also list them in src/app/robots.ts so Google picks them all up.
  */
-export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = siteConfig.url;
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const baseUrl = await getSiteUrl();
   const now = new Date();
 
   const entries: MetadataRoute.Sitemap = [
