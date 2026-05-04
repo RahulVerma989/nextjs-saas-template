@@ -38,7 +38,7 @@ export class UserCrud extends BaseCrud<IUser> {
       ...data,
       plan: 'free',
       creditBalance: 0,
-      accountStatus: siteConfig.features.waitlistMode ? 'pending' : 'approved',
+      accountStatus: siteConfig.features.waitlist ? 'pending' : 'approved',
       preferences: {
         emailNotifications: true,
         timezone: 'UTC',
