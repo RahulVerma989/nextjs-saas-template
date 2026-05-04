@@ -14,6 +14,7 @@ import {
   Shield,
   Bell,
   Search,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 import { siteConfig } from './site.config';
@@ -67,11 +68,18 @@ function buildAdminNavigation(): NavItem[] {
   const items: NavItem[] = [];
 
   if (siteConfig.features.adminPanel) {
-    items.push({
-      name: 'Admin',
-      href: '/dashboard/admin',
-      icon: Shield,
-    });
+    items.push(
+      {
+        name: 'Overview',
+        href: '/dashboard/admin',
+        icon: Shield,
+      },
+      {
+        name: 'Users',
+        href: '/dashboard/admin/users',
+        icon: Users,
+      },
+    );
   }
 
   // SEO settings — admin-only, only when GSC indexing is enabled.

@@ -22,6 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { BrandIcon } from '@/components/brand-icon';
 import { LogOut, Moon, PanelLeft, PanelLeftClose, Sun, Zap } from 'lucide-react';
 
 export function Sidebar() {
@@ -62,9 +63,7 @@ export function Sidebar() {
           ) : (
             <div className="flex items-center justify-between w-full">
               <Link href="/dashboard" className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center">
-                  <span className="text-primary-foreground text-sm font-bold">{siteConfig.name[0]}</span>
-                </div>
+                <BrandIcon withBackground bgClassName="w-7 h-7" size={16} />
                 <span className="text-lg font-bold text-foreground">{siteConfig.name}</span>
               </Link>
               <button onClick={toggle} className="flex items-center rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors cursor-pointer">

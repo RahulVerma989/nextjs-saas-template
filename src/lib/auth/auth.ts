@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import { authConfig } from './auth.config';
 import { siteConfig } from '@/config/site.config';
+import { isDemoMode } from './demo';
 
 // Dynamic import to avoid Edge runtime issues
 async function getUserCrudDynamic() {
@@ -38,11 +39,16 @@ export const {
           avatarUrl: user.image || undefined,
         });
 
-        // Auto-assign admin role if email matches admin list
+        // Auto-assign admin role:
+        //   - If email is in siteConfig.admin.emails (real admin)
+        //   - OR if the deployment is running in demo mode (so visitors
+        //     can explore the admin UI on a public template demo
+        //     without needing their email pre-listed)
         const isAdminEmail = siteConfig.adminEmails.includes(user.email!.toLowerCase());
+        const grantAdmin = isAdminEmail || isDemoMode();
         const hasAdminRole = dbUser.roles?.includes('admin');
         const needsApproval = dbUser.accountStatus !== 'approved';
-        if (isAdminEmail && (!hasAdminRole || needsApproval)) {
+        if (grantAdmin && (!hasAdminRole || needsApproval)) {
           await userCrud.update(dbUser._id, {
             roles: ['user', 'admin'],
             ...(needsApproval ? { accountStatus: 'approved', approvedAt: new Date() } : {}),
