@@ -38,8 +38,11 @@
   --sidebar-primary: oklch(0.62 0.14 39.15);
   --sidebar-primary-foreground: oklch(0.99 0 0);
   --sidebar-accent: oklch(0.22 0 0);
-  --sidebar-accent-foreground: oklch(0.33 0 0);
-  --sidebar-border: oklch(0.94 0 0);
+  /* Sidebar accent is the dark pill behind the selected nav item.
+   * Foreground must be LIGHT to read on it in light mode — the
+   * pasted theme had a dark-on-dark contrast bug here. */
+  --sidebar-accent-foreground: oklch(0.99 0 0);
+  --sidebar-border: oklch(0.91 0.01 106.47);
   --sidebar-ring: oklch(0.77 0 0);
 
   /* Status colors — kept as their familiar HSL siblings, oklch'd lightly */
@@ -90,7 +93,9 @@
   --sidebar-primary-foreground: oklch(0.99 0 0);
   --sidebar-accent: oklch(0.17 0 0);
   --sidebar-accent-foreground: oklch(0.81 0.01 93.53);
-  --sidebar-border: oklch(0.94 0 0);
+  /* Pasted theme had this at 0.94 (near-white) which painted a bright
+   * line in dark mode.  Match the regular dark-mode border instead. */
+  --sidebar-border: oklch(0.36 0.01 106.85);
   --sidebar-ring: oklch(0.77 0 0);
 
   --warning: oklch(0.78 0.16 76);

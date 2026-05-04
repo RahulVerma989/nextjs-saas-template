@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdminApi } from '@/lib/auth/admin-guard';
+import { requireAdminApi, requireAdminWriteApi } from '@/lib/auth/admin-guard';
 import { connectDB } from '@/lib/db/connection';
 import { getUserCrud } from '@/lib/db/crud/user.crud';
 import type { IUser } from '@/types/db.types';
@@ -9,7 +9,7 @@ type RouteContext = { params: Promise<{ userId: string }> };
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
     const adminCheck = await requireAdminApi();
-    if (adminCheck instanceof NextResponse) return adminCheck;
+    if (adminCheck.response) return adminCheck.response;
 
     const { userId } = await context.params;
 
@@ -39,8 +39,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
-    const adminCheck = await requireAdminApi();
-    if (adminCheck instanceof NextResponse) return adminCheck;
+    // Use the write-guard so demo mode short-circuits user mutations.
+    const adminCheck = await requireAdminWriteApi();
+    if (adminCheck.response) return adminCheck.response;
 
     const { userId } = await context.params;
     const body = await req.json();

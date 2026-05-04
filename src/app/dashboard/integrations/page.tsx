@@ -28,7 +28,10 @@ export default function IntegrationsPage() {
     try {
       const res = await fetch('/api/integrations/api-keys');
       const data = await res.json();
-      if (data.success) setKeys(data.data);
+      // API shape: { success, data: { keys: APIKeyData[] } }.  The earlier
+      // version assigned `data.data` directly, which set `keys` to the
+      // wrapper object and crashed `.length` / `.map`.
+      if (data.success) setKeys(data.data?.keys ?? []);
     } finally {
       setLoading(false);
     }
@@ -100,7 +103,7 @@ export default function IntegrationsPage() {
 
         {createdKey && (
           <div className="mt-4 p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-            <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">API key created! Copy it now \u2014 it won&apos;t be shown again.</p>
+            <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">API key created! Copy it now — it won&apos;t be shown again.</p>
             <code className="text-xs bg-green-100 dark:bg-green-900 px-2 py-1 rounded break-all">{createdKey}</code>
           </div>
         )}
