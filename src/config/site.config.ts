@@ -128,16 +128,30 @@ export const siteConfig = {
   },
 
   // ─── Admin ────────────────────────────────────────────────
+  // Hardcoded admin emails for this deployment.  Leave empty in the
+  // template; supply via the ADMIN_EMAILS env var (comma-separated)
+  // so you don't have to fork the source to grant yourself admin.
   admin: {
-    emails: [] as string[],   // e.g. ['admin@example.com']
+    emails: [] as string[],
   },
 
   // ─── Convenience Aliases ──────────────────────────────────
   get supportEmail() {
     return this.support.email;
   },
-  get adminEmails() {
-    return this.admin.emails;
+  /**
+   * Combined admin allow-list: hardcoded `admin.emails` ∪ comma-
+   * separated `ADMIN_EMAILS` env var.  Lower-cased + de-duped.
+   * The auth `signIn` callback reads this on every login so adding
+   * an email and re-signing in is enough to grant admin.
+   */
+  get adminEmails(): readonly string[] {
+    const fromEnv = (process.env.ADMIN_EMAILS ?? '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    const fromConfig = this.admin.emails.map((e) => e.toLowerCase());
+    return Array.from(new Set([...fromConfig, ...fromEnv]));
   },
 } as const;
 

@@ -172,9 +172,9 @@ export function Sidebar() {
           <div className={cn('shrink-0 border-t border-sidebar-border pt-3 mt-2', collapsed ? 'px-2 pb-3' : 'px-3 pb-3')}>
             {/* Credits */}
             {!collapsed ? (
-              <Link href="/dashboard/billing" className="flex items-center gap-2 px-2 py-1.5 mb-2 rounded-md hover:bg-sidebar-accent transition-colors">
+              <Link href="/dashboard/billing" className="group flex items-center gap-2 px-2 py-1.5 mb-2 rounded-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
                 <Zap className="w-3 h-3 text-warning" />
-                <span className="text-xs font-medium text-sidebar-foreground">{user.creditBalance ?? 0} credits</span>
+                <span className="text-xs font-medium text-sidebar-foreground group-hover:text-sidebar-accent-foreground">{user.creditBalance ?? 0} credits</span>
               </Link>
             ) : (
               <TooltipProvider delayDuration={300}>
@@ -191,28 +191,28 @@ export function Sidebar() {
 
             {/* Theme toggle */}
             {collapsed ? (
-              <button onClick={toggleTheme} className="flex items-center justify-center w-full rounded-md p-2 mb-2 text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer">
+              <button onClick={toggleTheme} className="flex items-center justify-center w-full rounded-md p-2 mb-2 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors cursor-pointer">
                 {theme === 'dark' ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
               </button>
             ) : (
-              <button onClick={toggleTheme} className="flex items-center gap-x-3 w-full px-2 py-1.5 mb-2 rounded-md hover:bg-sidebar-accent transition-colors cursor-pointer">
-                {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
-                <span className="text-[13px] font-medium text-sidebar-foreground">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+              <button onClick={toggleTheme} className="group flex items-center gap-x-3 w-full px-2 py-1.5 mb-2 rounded-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors cursor-pointer">
+                {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-muted-foreground group-hover:text-sidebar-accent-foreground" />}
+                <span className="text-[13px] font-medium text-sidebar-foreground group-hover:text-sidebar-accent-foreground">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
               </button>
             )}
 
             {/* User dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className={cn('flex items-center w-full rounded-lg hover:bg-sidebar-accent transition-colors cursor-pointer text-left', collapsed ? 'justify-center p-1.5' : 'gap-2.5 px-2 py-2')}>
+                <button className={cn('group flex items-center w-full rounded-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors cursor-pointer text-left', collapsed ? 'justify-center p-1.5' : 'gap-2.5 px-2 py-2')}>
                   <Avatar className="h-8 w-8 shrink-0 ring-1 ring-border">
                     <AvatarImage src={user.image || undefined} alt={user.name || ''} />
                     <AvatarFallback className="text-[11px] font-medium bg-primary/10 text-primary">{initials}</AvatarFallback>
                   </Avatar>
                   {!collapsed && (
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-foreground truncate leading-tight">{user.name}</p>
-                      <p className="text-[11px] text-muted-foreground truncate leading-tight mt-0.5">{user.email}</p>
+                      <p className="text-[13px] font-medium text-foreground group-hover:text-sidebar-accent-foreground truncate leading-tight">{user.name}</p>
+                      <p className="text-[11px] text-muted-foreground group-hover:text-sidebar-accent-foreground/80 truncate leading-tight mt-0.5">{user.email}</p>
                     </div>
                   )}
                 </button>

@@ -52,16 +52,23 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
     const apiKeyCrud = getAPIKeyCrud();
-    const key = await apiKeyCrud.create({
-      userId: session.user.id,
+    // Use the domain-specific helper, not the base CRUD `create()`.
+    // `createKey()` generates the _id (UUID7), the random `sk_…` raw
+    // key, the SHA-256 hash, and the display prefix — all of which
+    // are required by the APIKey schema and never come from the
+    // request body.
+    const { apiKey, rawKey } = await apiKeyCrud.createKey(
+      session.user.id,
       name,
-      enabledTools: enabledTools || [],
-    });
+      enabledTools || [],
+    );
 
     return NextResponse.json(
       {
         success: true,
-        data: key,
+        // The frontend reads `data.rawKey` to show the one-time copy.
+        // Spread the apiKey alongside so callers also get the doc.
+        data: { ...apiKey, rawKey },
       },
       { status: 201 }
     );
