@@ -2,8 +2,9 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth/auth';
 import { siteConfig } from '@/config/site.config';
 import { connectDB } from '@/lib/db/connection';
-import { getConnection } from '@/lib/services/gsc.service';
+import { getConnection, getTargetHost } from '@/lib/services/gsc.service';
 import { PageIndex } from '@/lib/db/models';
+import { isDemoMode } from '@/lib/auth/demo';
 import { GSCSettingsClient } from './client';
 
 export const dynamic = 'force-dynamic';
@@ -31,22 +32,43 @@ export default async function SEOSettingsPage() {
 
   await connectDB();
   const conn = await getConnection();
-  const [submitted, indexed, notIndexed, errored, total] = await Promise.all([
-    PageIndex.countDocuments({ status: 'submitted' }),
-    PageIndex.countDocuments({ status: 'indexed' }),
-    PageIndex.countDocuments({ status: 'not_indexed' }),
-    PageIndex.countDocuments({ status: 'error' }),
-    PageIndex.countDocuments({}),
-  ]);
+  const [submitted, indexed, notIndexed, errored, total, pages] =
+    await Promise.all([
+      PageIndex.countDocuments({ status: 'submitted' }),
+      PageIndex.countDocuments({ status: 'indexed' }),
+      PageIndex.countDocuments({ status: 'not_indexed' }),
+      PageIndex.countDocuments({ status: 'error' }),
+      PageIndex.countDocuments({}),
+      // The full per-page status table — used to render the table
+      // beneath the stats so admins can see which routes are stuck.
+      PageIndex.find({})
+        .sort({ updatedAt: -1 })
+        .limit(200)
+        .lean(),
+    ]);
 
   return (
     <GSCSettingsClient
       connected={!!conn}
       siteUrl={conn?.siteUrl ?? null}
+      targetHost={getTargetHost()}
       connectedAt={conn?.connectedAt ? new Date(conn.connectedAt).toISOString() : null}
       lastUsedAt={conn?.lastUsedAt ? new Date(conn.lastUsedAt).toISOString() : null}
       lastError={conn?.lastError ?? null}
       stats={{ submitted, indexed, notIndexed, errored, total }}
+      readOnly={isDemoMode()}
+      pages={pages.map((p) => ({
+        path: p._id,
+        status: p.status,
+        coverageState: p.coverageState ?? null,
+        submittedAt: p.submittedAt
+          ? new Date(p.submittedAt).toISOString()
+          : null,
+        inspectedAt: p.inspectedAt
+          ? new Date(p.inspectedAt).toISOString()
+          : null,
+        lastError: p.lastError ?? null,
+      }))}
     />
   );
 }

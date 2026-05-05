@@ -51,10 +51,111 @@ export function buildConsentUrl(state: string): string {
   });
 }
 
+/** The host portion of `siteConfig.url`, e.g. "template.rahulverma.cc". */
+export function getTargetHost(): string {
+  try {
+    return new URL(siteConfig.url).hostname.toLowerCase();
+  } catch {
+    return 'localhost';
+  }
+}
+
 /**
- * Exchange the OAuth code for tokens.  The site URL is picked
- * automatically as the first verified property — admins can change
- * it later in the UI by reconnecting against a different property.
+ * Build the prioritised list of GSC property identifiers we'd accept
+ * for a given host.  Domain properties (`sc-domain:…`) cover all
+ * subdomains and protocols, so we accept the exact host AND any
+ * registrable parent (e.g. for `template.rahulverma.cc` we'll also
+ * match `sc-domain:rahulverma.cc`).  URL-prefix properties are tried
+ * with and without `www.` and across both protocols.
+ */
+function getDomainCandidates(host: string): string[] {
+  const stripped = host.replace(/^www\./, '').toLowerCase();
+  const parts = stripped.split('.');
+
+  // Walk up the hierarchy: e.g. template.rahulverma.cc -> ['template.rahulverma.cc', 'rahulverma.cc']
+  // Stop before we hit a single-label TLD (don't match `sc-domain:cc`).
+  const domainParents: string[] = [];
+  for (let i = 0; i < parts.length - 1; i++) {
+    domainParents.push(parts.slice(i).join('.'));
+  }
+
+  const candidates = new Set<string>();
+  for (const parent of domainParents) {
+    candidates.add(`sc-domain:${parent}`);
+  }
+  candidates.add(`https://${stripped}/`);
+  candidates.add(`https://www.${stripped}/`);
+  candidates.add(`http://${stripped}/`);
+  candidates.add(`http://www.${stripped}/`);
+  return Array.from(candidates);
+}
+
+/**
+ * Find the GSC property that matches `host`, ordered by preference.
+ * Returns `null` if the user has nothing verified for the domain.
+ *
+ * Permission level filter: we only consider properties where the
+ * caller is verified — `siteUnverifiedUser` properties cause every
+ * subsequent indexing/inspection call to 403 with "User not verified".
+ */
+export function findVerifiedSiteForHost(
+  sites: Array<{ siteUrl?: string | null; permissionLevel?: string | null }>,
+  host: string,
+): string | null {
+  const candidates = getDomainCandidates(host);
+  for (const candidate of candidates) {
+    const match = sites.find(
+      (s) =>
+        (s.siteUrl ?? '').toLowerCase() === candidate &&
+        s.permissionLevel &&
+        s.permissionLevel !== 'siteUnverifiedUser',
+    );
+    if (match?.siteUrl) return match.siteUrl;
+  }
+  return null;
+}
+
+/**
+ * Attempt to add a GSC property for `host`.  Tries the apex
+ * `sc-domain:` form first (covers all subdomains + protocols, the
+ * pattern Quillly uses) and falls back to a URL-prefix property if
+ * the domain form is rejected.
+ *
+ * Adding doesn't verify ownership — the property will land in
+ * `siteUnverifiedUser` state until the user proves ownership in
+ * Search Console.  We don't auto-verify here because verification
+ * needs DNS/HTML control we may not have on the deployment domain.
+ */
+async function addGSCSite(oauth: OAuth2Client, host: string): Promise<string> {
+  const stripped = host.replace(/^www\./, '');
+  const webmasters = google.webmasters({ version: 'v3', auth: oauth });
+
+  const domainSiteUrl = `sc-domain:${stripped}`;
+  try {
+    await webmasters.sites.add({ siteUrl: domainSiteUrl });
+    return domainSiteUrl;
+  } catch {
+    // Domain property may be rejected (no DNS verification path);
+    // fall through to URL-prefix.
+  }
+
+  const urlSiteUrl = `https://${stripped}/`;
+  await webmasters.sites.add({ siteUrl: urlSiteUrl });
+  return urlSiteUrl;
+}
+
+/**
+ * Exchange the OAuth code for tokens and persist the connection.
+ *
+ * Property selection (Quillly-style):
+ *   1. List the user's GSC properties.
+ *   2. Prefer the verified property whose host matches `siteConfig.url`
+ *      (sc-domain first, walking up parents, then URL-prefix variants).
+ *   3. If a `preferredSiteUrl` is supplied AND it's verified, that wins.
+ *   4. If nothing verified matches the deployment domain, we DON'T
+ *      silently pick someone else's domain — that's how the template
+ *      ended up connected to `sc-domain:ringtrue.app`.  Instead we
+ *      surface a precise error pointing at the host we're looking for.
  */
 export async function exchangeCodeAndStore(args: {
   code: string;
@@ -70,26 +171,47 @@ export async function exchangeCodeAndStore(args: {
   }
   oauth.setCredentials(tokens);
 
-  // Pick the property to track: prefer the user-supplied URL if it's
-  // verified; otherwise fall back to the first verified one Google
-  // returns.  Without a verified property, indexing calls will 403.
   const sites = await google
     .webmasters({ version: 'v3', auth: oauth })
     .sites.list();
-  const verified =
-    sites.data.siteEntry?.filter(
-      (s) => s.permissionLevel && s.permissionLevel !== 'siteUnverifiedUser',
-    ) ?? [];
-  if (verified.length === 0) {
+  const allSites = sites.data.siteEntry ?? [];
+  const verified = allSites.filter(
+    (s) => s.permissionLevel && s.permissionLevel !== 'siteUnverifiedUser',
+  );
+
+  const host = getTargetHost();
+  let chosen: string | null = null;
+
+  // 1. Caller override (e.g. admin re-picking from a dropdown later).
+  if (args.preferredSiteUrl) {
+    const match = verified.find((v) => v.siteUrl === args.preferredSiteUrl);
+    if (match?.siteUrl) chosen = match.siteUrl;
+  }
+
+  // 2. Match by deployment host.
+  if (!chosen) {
+    chosen = findVerifiedSiteForHost(verified, host);
+  }
+
+  if (!chosen) {
+    if (verified.length === 0) {
+      throw new Error(
+        `No verified Search Console properties found on this Google account. ` +
+          `Add and verify "${host}" (or its apex domain) at ` +
+          `https://search.google.com/search-console first.`,
+      );
+    }
+
+    const have = verified
+      .map((s) => s.siteUrl)
+      .filter(Boolean)
+      .join(', ');
     throw new Error(
-      'No verified Search Console properties found for this Google account. ' +
-        'Verify your site in https://search.google.com/search-console first.',
+      `None of your verified Search Console properties match ${host}. ` +
+        `This account is verified for: ${have}. ` +
+        `Add and verify "${host}" (or its apex) in Search Console, then retry.`,
     );
   }
-  const chosen =
-    (args.preferredSiteUrl &&
-      verified.find((v) => v.siteUrl === args.preferredSiteUrl)?.siteUrl) ||
-    verified[0].siteUrl!;
 
   await connectDB();
   const conn = await GSCConnection.findByIdAndUpdate(
@@ -109,6 +231,45 @@ export async function exchangeCodeAndStore(args: {
   ).lean<IGSCConnection>();
 
   if (!conn) throw new Error('Failed to persist GSC connection');
+  return conn;
+}
+
+/**
+ * List every GSC property the user has access to.  Used by the
+ * settings UI to let admins re-pick if the auto-match got it wrong.
+ */
+export async function listSites(): Promise<
+  Array<{ siteUrl: string; permissionLevel: string; verified: boolean }>
+> {
+  const { auth } = await getAuthedClient();
+  const res = await google.webmasters({ version: 'v3', auth }).sites.list();
+  return (res.data.siteEntry ?? []).map((s) => ({
+    siteUrl: s.siteUrl ?? '',
+    permissionLevel: s.permissionLevel ?? 'siteUnverifiedUser',
+    verified:
+      !!s.permissionLevel && s.permissionLevel !== 'siteUnverifiedUser',
+  }));
+}
+
+/**
+ * Switch the active GSC property for an already-connected account.
+ * Validates that the user is verified on `siteUrl` before saving.
+ */
+export async function setActiveSite(siteUrl: string): Promise<IGSCConnection> {
+  const sites = await listSites();
+  const match = sites.find((s) => s.siteUrl === siteUrl && s.verified);
+  if (!match) {
+    throw new Error(
+      `${siteUrl} is not a verified property on this Google account.`,
+    );
+  }
+  await connectDB();
+  const conn = await GSCConnection.findByIdAndUpdate(
+    GSC_CONNECTION_ID,
+    { siteUrl, lastError: undefined },
+    { new: true },
+  ).lean<IGSCConnection>();
+  if (!conn) throw new Error('GSC is not connected');
   return conn;
 }
 
