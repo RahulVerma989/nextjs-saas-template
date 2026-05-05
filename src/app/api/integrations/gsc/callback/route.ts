@@ -10,24 +10,34 @@ import { siteConfig } from '@/config/site.config';
  * OAuth callback that exchanges the code for a refresh + access token,
  * picks the first verified Search Console property, and stores
  * everything in the singleton GSCConnection doc.
+ *
+ * All redirects use `siteConfig.url` as the base (instead of
+ * `req.url`).  Inside a Dockerized standalone server the request URL
+ * resolves to the internal bind address (e.g. `0.0.0.0:3000`), and if
+ * the reverse proxy doesn't rewrite the Location header users land on
+ * the unreachable internal host.  `siteConfig.url` is set at build
+ * time from `NEXT_PUBLIC_APP_URL` and is always the canonical public
+ * URL we want to send users to.
  */
 export async function GET(req: NextRequest) {
+  const base = siteConfig.url;
+
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL('/login', req.url));
+    return NextResponse.redirect(new URL('/login', base));
   }
   const isAdmin =
     siteConfig.adminEmails.includes((session.user.email ?? '').toLowerCase()) ||
     (session.user as { roles?: string[] }).roles?.includes('admin');
   if (!isAdmin) {
-    return NextResponse.redirect(new URL('/dashboard', req.url));
+    return NextResponse.redirect(new URL('/dashboard', base));
   }
 
   const code = req.nextUrl.searchParams.get('code');
   const stateFromGoogle = req.nextUrl.searchParams.get('state');
   const errorFromGoogle = req.nextUrl.searchParams.get('error');
 
-  const settingsUrl = new URL('/dashboard/settings/seo', req.url);
+  const settingsUrl = new URL('/dashboard/settings/seo', base);
 
   if (errorFromGoogle) {
     settingsUrl.searchParams.set('gsc', `error:${errorFromGoogle}`);
