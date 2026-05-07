@@ -15,6 +15,8 @@ interface SiteOption {
 
 interface Verification {
   method: Method | null;
+  /** Host the latest token was issued for — apex or target. */
+  host: string | null;
   metaToken: string | null;
   fileName: string | null;
   fileContent: string | null;
@@ -25,6 +27,8 @@ interface Props {
   connected: boolean;
   siteUrl: string | null;
   targetHost: string;
+  /** Apex of `targetHost` — for the "verify apex" toggle. */
+  apexHost: string;
   connectedAt: string | null;
   lastUsedAt: string | null;
   lastError: string | null;
@@ -41,6 +45,16 @@ export function GSCSettingsClient(props: Props) {
   const [sites, setSites] = useState<SiteOption[] | null>(null);
   const [sitesLoaded, setSitesLoaded] = useState(false);
   const [method, setMethod] = useState<Method>(props.verification.method ?? 'META');
+  const hasSubdomain = props.targetHost !== props.apexHost;
+  // Default to apex when the deployment lives on a subdomain — covers
+  // every subdomain with one TXT record, and matches what most DNS
+  // providers (Hostinger, Cloudflare, Namecheap) make easy.
+  const [verifyApex, setVerifyApex] = useState<boolean>(
+    props.verification.host
+      ? props.verification.host === props.apexHost
+      : hasSubdomain,
+  );
+  const verifyHost = verifyApex ? props.apexHost : props.targetHost;
 
   useEffect(() => {
     const status = search.get('gsc');
@@ -111,15 +125,20 @@ export function GSCSettingsClient(props: Props) {
     }
   };
 
-  const handleFetchToken = async (m: Method) => {
+  const handleFetchToken = async (m: Method, host = verifyHost) => {
     setBusy('fetch');
     setBanner(null);
     try {
-      const res = await fetch(`/api/integrations/gsc/verify?method=${m}`);
+      const res = await fetch(
+        `/api/integrations/gsc/verify?method=${m}&host=${encodeURIComponent(host)}`,
+      );
       const data = await res.json();
       if (data.success) {
         setMethod(m);
-        setBanner({ kind: 'info', text: `Fetched a fresh ${m} token. Place it on your site, then click "Verify ownership".` });
+        setBanner({
+          kind: 'info',
+          text: `Fetched a fresh ${m} token for ${host}. Place it on your site, then click "Verify ownership".`,
+        });
         router.refresh();
       } else {
         setBanner({ kind: 'error', text: data.error ?? 'Failed to fetch token' });
@@ -286,6 +305,10 @@ export function GSCSettingsClient(props: Props) {
           setMethod={setMethod}
           verification={props.verification}
           targetHost={props.targetHost}
+          apexHost={props.apexHost}
+          verifyApex={verifyApex}
+          setVerifyApex={setVerifyApex}
+          verifyHost={verifyHost}
           siteUrl={props.siteUrl}
           readOnly={props.readOnly}
           busy={busy}
@@ -302,6 +325,10 @@ function VerificationPanel({
   setMethod,
   verification,
   targetHost,
+  apexHost,
+  verifyApex,
+  setVerifyApex,
+  verifyHost,
   siteUrl,
   readOnly,
   busy,
@@ -312,27 +339,74 @@ function VerificationPanel({
   setMethod: (m: Method) => void;
   verification: Verification;
   targetHost: string;
+  apexHost: string;
+  verifyApex: boolean;
+  setVerifyApex: (v: boolean) => void;
+  verifyHost: string;
   siteUrl: string | null;
   readOnly: boolean;
   busy: 'disconnect' | 'switch' | 'fetch' | 'verify' | null;
-  onFetchToken: (m: Method) => void;
+  onFetchToken: (m: Method, host?: string) => void;
   onVerify: () => void;
 }) {
-  const apex = targetHost.replace(/^www\./, '');
+  const hasSubdomain = targetHost !== apexHost;
+  // Token is "live" only if it was issued for the host the user is
+  // currently aiming at — switching apex/subdomain invalidates it.
+  const tokenMatchesTarget = verification.host === verifyHost;
   const haveToken =
-    (method === 'META' && verification.metaToken) ||
-    (method === 'FILE' && verification.fileName) ||
-    (method === 'DNS_TXT' && verification.dnsRecord);
+    tokenMatchesTarget &&
+    ((method === 'META' && verification.metaToken) ||
+      (method === 'FILE' && verification.fileName) ||
+      (method === 'DNS_TXT' && verification.dnsRecord));
+  // Subdomain part for DNS instructions, e.g. "template" for
+  // template.rahulverma.cc inside the rahulverma.cc zone.
+  const subdomainLabel =
+    hasSubdomain && !verifyApex
+      ? targetHost.replace(new RegExp(`\\.${apexHost.replace(/\./g, '\\.')}$`), '')
+      : '';
 
   return (
     <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-6">
       <h2 className="text-lg font-semibold mb-2">Verify ownership</h2>
       <p className="text-sm text-muted-foreground mb-4">
         Google needs proof that you own{' '}
-        <code className="font-mono">{siteUrl ?? targetHost}</code> before it
-        accepts indexing requests. Pick a method, place the token, then hit{' '}
+        <code className="font-mono">{verifyHost}</code> before it accepts
+        indexing requests. Pick a target + method, place the token, then hit{' '}
         <em>Verify ownership</em> — we&apos;ll ask Google to check.
       </p>
+
+      {hasSubdomain && (
+        <div className="mb-4">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+            Verify against
+          </div>
+          <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
+            <button
+              type="button"
+              onClick={() => setVerifyApex(true)}
+              className={`px-3 py-1.5 transition-colors ${
+                verifyApex ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-accent'
+              }`}
+            >
+              Apex ({apexHost})
+            </button>
+            <button
+              type="button"
+              onClick={() => setVerifyApex(false)}
+              className={`px-3 py-1.5 transition-colors border-l border-border ${
+                !verifyApex ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-accent'
+              }`}
+            >
+              Subdomain ({targetHost})
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {verifyApex
+              ? `One TXT on the apex zone covers ${targetHost} and every other ${apexHost} subdomain forever — recommended.`
+              : `Verifies only ${targetHost}. Pick this if you can't add records to the apex zone.`}
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 mb-4">
         {(['META', 'FILE', 'DNS_TXT'] as Method[]).map((m) => (
@@ -419,10 +493,24 @@ function VerificationPanel({
           {method === 'DNS_TXT' && verification.dnsRecord && (
             <Instructions
               steps={[
-                <>
-                  Add a TXT record to the DNS zone for{' '}
-                  <code>{apex}</code>:
-                </>,
+                verifyApex ? (
+                  <>
+                    Add a TXT record on the apex domain{' '}
+                    <code>{apexHost}</code>. In most DNS providers
+                    (Hostinger, Cloudflare, Namecheap), open the zone
+                    for <code>{apexHost}</code> and add:
+                  </>
+                ) : (
+                  <>
+                    Add a TXT record on{' '}
+                    <code>{verifyHost}</code>. In most DNS providers
+                    you don&apos;t have a separate zone for the
+                    subdomain, so open the zone for{' '}
+                    <code>{apexHost}</code> and set the host to{' '}
+                    <code>{subdomainLabel}</code> (the part before{' '}
+                    <code>.{apexHost}</code>):
+                  </>
+                ),
               ]}
             >
               <div className="rounded-md border border-border bg-background p-3 text-xs font-mono space-y-1">
@@ -430,7 +518,8 @@ function VerificationPanel({
                   <span className="text-muted-foreground">Type: </span>TXT
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Host: </span>@ (root)
+                  <span className="text-muted-foreground">Host / Name: </span>
+                  {verifyApex ? '@ (root)' : subdomainLabel || '@ (root)'}
                 </div>
                 <div className="break-all">
                   <span className="text-muted-foreground">Value: </span>
@@ -439,8 +528,8 @@ function VerificationPanel({
               </div>
               <p className="text-xs text-muted-foreground">
                 DNS propagation can take a few minutes — wait until{' '}
-                <code>dig TXT {apex}</code> shows the record before clicking
-                Verify.
+                <code>dig TXT {verifyHost}</code> shows the record before
+                clicking Verify.
               </p>
             </Instructions>
           )}
