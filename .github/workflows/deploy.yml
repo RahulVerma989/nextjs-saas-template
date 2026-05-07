@@ -7,7 +7,6 @@ on:
 
 # `vars.*` lets you store the registry hostname as a non-secret repo
 # variable; `secrets.*` is kept as a fallback for the original setup.
-# Either side wins — whichever you configured.
 env:
   REGISTRY: ${{ vars.DOCKER_REGISTRY_URL || secrets.DOCKER_REGISTRY_URL }}
   IMAGE_NAME: nextjs-saas-template
@@ -15,14 +14,15 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    # Bind to the `production` environment so env-scoped secrets and
+    # variables (DOCKER_REGISTRY_URL, *_USERNAME, *_PASSWORD,
+    # DOKPLOY_WEBHOOK_URL, NEXT_PUBLIC_APP_URL) are visible.
+    environment: production
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Fail fast with a clear message when the registry env vars
-      # aren't wired up. Without this, the next step writes a broken
-      # daemon.json and Docker exits with a confusing systemd error.
       - name: Verify required configuration
         run: |
           missing=()
@@ -36,28 +36,37 @@ jobs:
             exit 1
           fi
           echo "REGISTRY=${REGISTRY}"
-          echo "IMAGE=${REGISTRY}/${IMAGE_NAME}"
 
-      - name: Compute image tag
+      # `insecure-registries`, the BuildKit registry block, and
+      # `docker login` all want host[:port] only — strip the
+      # scheme defensively so users can store the var either way.
+      - name: Compute registry host + image ref
         id: image
-        run: echo "ref=${REGISTRY}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+        run: |
+          host="${REGISTRY#https://}"
+          host="${host#http://}"
+          host="${host%/}"
+          echo "host=${host}" >> "$GITHUB_OUTPUT"
+          echo "ref=${host}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "REGISTRY_HOST=${host}"
+          echo "IMAGE=${host}/${IMAGE_NAME}"
 
       - name: Allow self-signed Docker registry
         run: |
-          echo "{\"insecure-registries\": [\"${REGISTRY}\"]}" | sudo tee /etc/docker/daemon.json
+          echo "{\"insecure-registries\": [\"${{ steps.image.outputs.host }}\"]}" | sudo tee /etc/docker/daemon.json
           sudo systemctl restart docker
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
           buildkitd-config-inline: |
-            [registry."${{ env.REGISTRY }}"]
+            [registry."${{ steps.image.outputs.host }}"]
               insecure = true
 
       - name: Log in to Docker registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ steps.image.outputs.host }}
           username: ${{ secrets.DOCKER_REGISTRY_USERNAME }}
           password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
 
