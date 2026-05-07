@@ -5,34 +5,68 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# `vars.*` lets you store the registry hostname as a non-secret repo
+# variable; `secrets.*` is kept as a fallback for the original setup.
 env:
-  REGISTRY: ${{ secrets.DOCKER_REGISTRY_URL }}
-  IMAGE: ${{ secrets.DOCKER_REGISTRY_URL }}/nextjs-saas-template
+  REGISTRY: ${{ vars.DOCKER_REGISTRY_URL || secrets.DOCKER_REGISTRY_URL }}
+  IMAGE_NAME: nextjs-saas-template
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    # Bind to the `production` environment so env-scoped secrets and
+    # variables (DOCKER_REGISTRY_URL, *_USERNAME, *_PASSWORD,
+    # DOKPLOY_WEBHOOK_URL, NEXT_PUBLIC_APP_URL) are visible.
+    environment: production
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify required configuration
+        run: |
+          missing=()
+          [ -z "${REGISTRY}" ] && missing+=("DOCKER_REGISTRY_URL (vars or secrets)")
+          [ -z "${{ secrets.DOCKER_REGISTRY_USERNAME }}" ] && missing+=("DOCKER_REGISTRY_USERNAME (secret)")
+          [ -z "${{ secrets.DOCKER_REGISTRY_PASSWORD }}" ] && missing+=("DOCKER_REGISTRY_PASSWORD (secret)")
+          [ -z "${{ secrets.DOKPLOY_WEBHOOK_URL }}" ] && missing+=("DOKPLOY_WEBHOOK_URL (secret)")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required GHA configuration:"
+            for m in "${missing[@]}"; do echo "::error::  - $m"; done
+            exit 1
+          fi
+          echo "REGISTRY=${REGISTRY}"
+
+      # `insecure-registries`, the BuildKit registry block, and
+      # `docker login` all want host[:port] only — strip the
+      # scheme defensively so users can store the var either way.
+      - name: Compute registry host + image ref
+        id: image
+        run: |
+          host="${REGISTRY#https://}"
+          host="${host#http://}"
+          host="${host%/}"
+          echo "host=${host}" >> "$GITHUB_OUTPUT"
+          echo "ref=${host}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "REGISTRY_HOST=${host}"
+          echo "IMAGE=${host}/${IMAGE_NAME}"
+
       - name: Allow self-signed Docker registry
         run: |
-          echo '{"insecure-registries": ["${{ env.REGISTRY }}"]}' | sudo tee /etc/docker/daemon.json
+          echo "{\"insecure-registries\": [\"${{ steps.image.outputs.host }}\"]}" | sudo tee /etc/docker/daemon.json
           sudo systemctl restart docker
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
           buildkitd-config-inline: |
-            [registry."${{ env.REGISTRY }}"]
+            [registry."${{ steps.image.outputs.host }}"]
               insecure = true
 
       - name: Log in to Docker registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ steps.image.outputs.host }}
           username: ${{ secrets.DOCKER_REGISTRY_USERNAME }}
           password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
 
@@ -40,15 +74,15 @@ jobs:
         continue-on-error: true
         run: |
           docker buildx imagetools create \
-            -t ${{ env.IMAGE }}:rollback \
-            ${{ env.IMAGE }}:latest
+            -t ${{ steps.image.outputs.ref }}:rollback \
+            ${{ steps.image.outputs.ref }}:latest
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ env.IMAGE }}:latest
+          tags: ${{ steps.image.outputs.ref }}:latest
           build-args: |
             NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL || 'https://template.rahulverma.cc' }}
 
