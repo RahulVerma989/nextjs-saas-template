@@ -9,3 +9,5 @@ export { OAuthClient } from './oauth-client.model';
 export { OAuthCode } from './oauth-code.model';
 export { OAuthToken } from './oauth-token.model';
 export { ServiceRun } from './service-run.model';
+export { GSCConnection, GSC_CONNECTION_ID } from './gsc-connection.model';
+export { PageIndex } from './page-index.model';

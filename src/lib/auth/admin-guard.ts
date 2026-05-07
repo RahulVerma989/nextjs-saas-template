@@ -1,5 +1,6 @@
 import { auth } from './auth';
 import { NextResponse } from 'next/server';
+import { isAdminWriteAllowed } from './demo';
 
 export async function requireAdmin() {
   const session = await auth();
@@ -36,4 +37,33 @@ export async function requireAdminApi() {
   }
 
   return { session: result.session!, response: null };
+}
+
+/**
+ * Same as `requireAdminApi` but additionally short-circuits with a
+ * 403 in demo mode.  Use this on every admin endpoint that mutates
+ * state (PATCH / POST / DELETE) so a public demo deploy can't be
+ * vandalised.  Reads stay open so visitors can still see the data.
+ */
+export async function requireAdminWriteApi() {
+  const adminCheck = await requireAdminApi();
+  if (adminCheck.response) return adminCheck;
+
+  if (!isAdminWriteAllowed()) {
+    return {
+      session: null,
+      response: NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'DEMO_MODE',
+            message: 'Demo mode is enabled — destructive admin actions are disabled.',
+          },
+        },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return adminCheck;
 }

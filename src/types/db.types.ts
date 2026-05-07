@@ -216,3 +216,65 @@ export interface IServiceRun extends DocBase {
   createdAt: Date;
   updatedAt: Date;
 }
+
+// ─── GSC Connection ─────────────────────────────────────────
+
+export type GSCVerificationMethod = 'META' | 'FILE' | 'DNS_TXT';
+
+export interface IGSCConnection extends DocBase {
+  /** Always "singleton" — only one GSC connection per deployment. */
+  _id: string;
+  /** Search Console property URL (e.g. "https://example.com/" or "sc-domain:example.com"). */
+  siteUrl: string;
+  refreshToken: string;
+  accessToken: string;
+  accessTokenExpiresAt: Date;
+  scopes: string[];
+  connectedByUserId: string;
+  connectedAt: Date;
+  lastUsedAt?: Date;
+  lastError?: string;
+  /**
+   * Whether the property is currently verified in Google Search Console.
+   * Refreshed on every connect, every manual verify, and every sync.
+   */
+  verified?: boolean;
+  /** Method most recently used to fetch a verification token. */
+  verificationMethod?: GSCVerificationMethod;
+  /** Bare META content value (the part Next.js's metadata.verification.google expects). */
+  verificationMetaToken?: string;
+  /** Filename Google asks you to upload at the domain root for FILE verification. */
+  verificationFileName?: string;
+  /** Body of the file Google asks you to upload (one short string). */
+  verificationFileContent?: string;
+  /** TXT record value to add to DNS for DNS_TXT verification. */
+  verificationDnsRecord?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ─── Page Index ─────────────────────────────────────────────
+
+export type PageIndexStatus =
+  | 'pending'        // Not yet submitted
+  | 'submitted'      // Submitted to Indexing API
+  | 'indexed'        // Confirmed in Google's index
+  | 'not_indexed'    // Inspected, not in index
+  | 'error';         // Failed to submit / inspect
+
+export interface IPageIndex extends DocBase {
+  /** Path on your domain — used as _id (e.g. "/", "/pricing"). */
+  _id: string;
+  /** Hash of the page's source files at the last successful submission. */
+  contentHash: string;
+  status: PageIndexStatus;
+  /** Last URL_UPDATED submission timestamp. */
+  submittedAt?: Date;
+  /** Last URL inspection timestamp. */
+  inspectedAt?: Date;
+  /** Coverage state from URL Inspection API (e.g. "Submitted and indexed"). */
+  coverageState?: string;
+  lastError?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}

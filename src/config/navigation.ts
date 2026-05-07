@@ -13,6 +13,9 @@ import {
   Plug,
   Shield,
   Bell,
+  Search,
+  Users,
+  ListChecks,
   type LucideIcon,
 } from 'lucide-react';
 import { siteConfig } from './site.config';
@@ -63,15 +66,42 @@ function buildNavigationSections(): NavSection[] {
 }
 
 function buildAdminNavigation(): NavItem[] {
-  if (!siteConfig.features.adminPanel) return [];
+  const items: NavItem[] = [];
 
-  return [
-    {
-      name: 'Admin',
-      href: '/dashboard/admin',
-      icon: Shield,
-    },
-  ];
+  if (siteConfig.features.adminPanel) {
+    items.push(
+      {
+        name: 'Overview',
+        href: '/dashboard/admin',
+        icon: Shield,
+      },
+      {
+        name: 'Users',
+        href: '/dashboard/admin/users',
+        icon: Users,
+      },
+    );
+  }
+
+  // SEO + page-indexing — admin-only, only when GSC indexing is
+  // enabled.  SEO is the connection / verification page; Page Indexing
+  // is the per-route status table.
+  if (siteConfig.features.gscIndexing) {
+    items.push(
+      {
+        name: 'SEO',
+        href: '/dashboard/settings/seo',
+        icon: Search,
+      },
+      {
+        name: 'Page Indexing',
+        href: '/dashboard/admin/page-indexing',
+        icon: ListChecks,
+      },
+    );
+  }
+
+  return items;
 }
 
 export const navigationSections = buildNavigationSections();

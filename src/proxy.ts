@@ -6,9 +6,10 @@ import type { NextRequest } from 'next/server';
  * Runs in Edge Runtime — no Node.js APIs.
  *
  * Handles:
+ * - Scanner-probe blocking (drop bot traffic before any work)
  * - Auth gating (session cookie check)
  * - Public route allowlisting
- * - Request logging
+ * - Request logging (method, path, status, duration)
  */
 
 // ─── Public paths (no session cookie required) ────────────────
@@ -29,16 +30,40 @@ const PUBLIC_PATHS = [
   '/.well-known',
 ];
 
-const SKIP_LOG_PREFIXES = [
-  '/_next/',
-  '/favicon',
-];
+const SKIP_LOG_PREFIXES = ['/_next/', '/favicon'];
+
+// ─── Scanner probe blocking ───────────────────────────────────
+// Automated bots constantly probe for misconfigured apps by hitting
+// well-known exploit paths (`.env`, `phpinfo.php`, `/wp-admin`, etc.).
+// None of these are legitimate for a Next.js app, so we return 404
+// immediately from the edge — saving CPU, keeping logs clean, and
+// never leaking auth status via redirects.
+
+/** File extensions never used by a Next.js app. */
+const BLOCKED_EXT_PATTERN =
+  /\.(?:php|asp|aspx|jsp|jspx|env|bak|swp|old|save|sql|sqlite|pem|key|crt|htaccess|htpasswd)(?:$|\?)/i;
+
+/** Dotfile paths that are common probe targets (anywhere in path). */
+const BLOCKED_DOTFILE_PATTERN =
+  /\/\.(?:env|git|aws|ssh|docker|htpasswd|htaccess)(?:$|\/|\.|~)/i;
+
+/** WordPress, phpMyAdmin, and other well-known admin prefixes. */
+const BLOCKED_PREFIX_PATTERN =
+  /^\/(?:wp-admin|wp-content|wp-includes|wp-login|wp-config|phpmyadmin|pma|mysql|phpinfo|_phpinfo|administrator|cgi-bin)(?:\/|$)/i;
+
+function isScannerProbe(pathname: string): boolean {
+  return (
+    BLOCKED_EXT_PATTERN.test(pathname) ||
+    BLOCKED_DOTFILE_PATTERN.test(pathname) ||
+    BLOCKED_PREFIX_PATTERN.test(pathname)
+  );
+}
 
 // ─── Helpers ──────────────────────────────────────────────────
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`)
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
 }
 
@@ -61,6 +86,26 @@ export function proxy(request: NextRequest) {
   const start = Date.now();
   const { pathname } = request.nextUrl;
   const method = request.method;
+
+  // ─── Scanner probe blocking (fast-path) ────────────────────
+  // Block bot traffic at the edge before any routing or auth work.
+  if (isScannerProbe(pathname)) {
+    logRequest(method, pathname, 404, start, 'scanner');
+    return new NextResponse('Not Found', { status: 404 });
+  }
+
+  // ─── GSC FILE-method verification rewrite ──────────────────
+  // Google fetches the verification file at the domain root
+  // (`/google<token>.html`).  Rewrite to the API route that pulls
+  // the live token + content from the connection.  Public — Google's
+  // crawler doesn't carry a session.
+  if (/^\/google[a-z0-9]+\.html$/i.test(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/api/integrations/gsc/file/${pathname.slice(1)}`;
+    logRequest(method, pathname, 200, start, 'gsc-verify-file');
+    return NextResponse.rewrite(url);
+  }
+
   const sessionToken = getSessionToken(request);
 
   // Redirect authenticated users from login to dashboard
@@ -83,7 +128,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Protect API routes
+  // Protect API routes (except public ones already handled above)
   if (pathname.startsWith('/api') && !sessionToken) {
     logRequest(method, pathname, 401, start, 'no-session');
     return NextResponse.json(
@@ -91,7 +136,7 @@ export function proxy(request: NextRequest) {
         success: false,
         error: { code: 'UNAUTHORIZED', message: 'Not authenticated' },
       },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
@@ -106,7 +151,7 @@ function logRequest(
   pathname: string,
   status: number,
   startMs: number,
-  note?: string
+  note?: string,
 ) {
   if (!shouldLog(pathname)) return;
   const durationMs = Date.now() - startMs;
@@ -116,6 +161,13 @@ function logRequest(
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder image / manifest assets
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest)$).*)',
   ],
 };

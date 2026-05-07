@@ -41,3 +41,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Generated brand assets — re-created on every build from siteConfig
+# by scripts/generate-brand-assets.ts.  Don't commit them.
+/public/favicon.ico
+/public/favicon.svg
+/public/favicon-*.png
+/public/apple-touch-icon.png
+/public/android-chrome-*.png
+/public/site.webmanifest
+/public/.brand-version
+
+# Generated page manifest (build-time hashes for GSC indexing)
+/src/lib/data/page-manifest.json

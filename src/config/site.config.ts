@@ -22,12 +22,16 @@ export const siteConfig = {
    * Option 3 — Inline SVG path data (for simple icons):
    *   brandIcon: { type: 'svg-inline', d: 'M12 2L2 22h20L12 2z', viewBox: '0 0 24 24' }
    */
-  brandIcon: { type: 'lucide' as const, name: 'Rocket' },
+  brandIcon: { type: 'lucide' as const, name: 'Layers' },
 
   // ─── Theme ────────────────────────────────────────────────
+  // Hex equivalents of the OKLCH tokens in src/app/globals.css.
+  // The brand-asset generator and OG/Twitter images consume hex,
+  // while runtime CSS uses the OKLCH source of truth.  Update both
+  // sides together when re-skinning.
   theme: {
-    primaryColor: '#6366f1',   // Indigo-500
-    accentColor: '#8b5cf6',    // Violet-500
+    primaryColor: '#c2703e',   // ~ oklch(0.62 0.14 39.15) — warm copper
+    accentColor: '#d4915f',    // ~ oklch(0.72 0.10 50)    — lighter copper
   },
 
   // ─── Social / Links ───────────────────────────────────────
@@ -87,6 +91,7 @@ export const siteConfig = {
   //   notifications      auth
   //   fileUploads        auth
   //   waitlist           (MongoDB must be configured)
+  //   gscIndexing        auth, backgroundServices
   //
   features: {
     /** Master switch — disabling removes login, dashboard, and all auth-dependent features */
@@ -102,19 +107,51 @@ export const siteConfig = {
     apiKeys: true,
     notifications: true,
     darkMode: true,
+    /** Auto-submit marketing pages to Google Search Console when their content changes */
+    gscIndexing: true,
+  },
+
+  // ─── SEO ──────────────────────────────────────────────────
+  seo: {
+    /** Twitter handle for twitter:site / twitter:creator (e.g. '@yourhandle') */
+    twitterHandle: '',
+    /** Default OG image dimensions */
+    ogImage: {
+      width: 1200,
+      height: 630,
+    },
+    /** Background gradient stops for the auto-generated OG image */
+    ogBackground: {
+      from: '#ffffff',
+      to: '#f1f5f9',
+    },
   },
 
   // ─── Admin ────────────────────────────────────────────────
+  // Hardcoded admin emails for this deployment.  Leave empty in the
+  // template; supply via the ADMIN_EMAILS env var (comma-separated)
+  // so you don't have to fork the source to grant yourself admin.
   admin: {
-    emails: [] as string[],   // e.g. ['admin@example.com']
+    emails: [] as string[],
   },
 
   // ─── Convenience Aliases ──────────────────────────────────
   get supportEmail() {
     return this.support.email;
   },
-  get adminEmails() {
-    return this.admin.emails;
+  /**
+   * Combined admin allow-list: hardcoded `admin.emails` ∪ comma-
+   * separated `ADMIN_EMAILS` env var.  Lower-cased + de-duped.
+   * The auth `signIn` callback reads this on every login so adding
+   * an email and re-signing in is enough to grant admin.
+   */
+  get adminEmails(): readonly string[] {
+    const fromEnv = (process.env.ADMIN_EMAILS ?? '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    const fromConfig = this.admin.emails.map((e) => e.toLowerCase());
+    return Array.from(new Set([...fromConfig, ...fromEnv]));
   },
 } as const;
 

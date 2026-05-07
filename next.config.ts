@@ -8,11 +8,17 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // These packages have native bindings or use Node.js APIs that
+  // shouldn't be bundled by webpack — Next.js will require() them
+  // at runtime instead.
   serverExternalPackages: [
     "@infisical/sdk",
     "mongoose",
     "agenda",
+    "@agendajs/mongo-backend",
     "ioredis",
+    "googleapis",
+    "sharp",
   ],
   async headers() {
     return [
