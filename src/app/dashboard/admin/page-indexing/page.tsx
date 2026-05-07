@@ -4,7 +4,7 @@ import { siteConfig } from '@/config/site.config';
 import { connectDB } from '@/lib/db/connection';
 import { getConnection } from '@/lib/services/gsc.service';
 import { PageIndex } from '@/lib/db/models';
-import { isDemoMode } from '@/lib/auth/demo';
+import { isDemoMode, isOwnerEmail } from '@/lib/auth/demo';
 import { PageIndexingClient } from './client';
 
 export const dynamic = 'force-dynamic';
@@ -52,7 +52,7 @@ export default async function PageIndexingAdminPage() {
       verified={!!conn?.verified}
       siteUrl={conn?.siteUrl ?? null}
       stats={{ submitted, indexed, notIndexed, errored, pending, total }}
-      readOnly={isDemoMode()}
+      readOnly={isDemoMode() && !isOwnerEmail(session.user.email)}
       pages={pages.map((p) => ({
         path: p._id,
         status: p.status,

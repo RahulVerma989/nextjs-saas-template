@@ -49,7 +49,8 @@ export async function requireAdminWriteApi() {
   const adminCheck = await requireAdminApi();
   if (adminCheck.response) return adminCheck;
 
-  if (!isAdminWriteAllowed()) {
+  const email = adminCheck.session?.user?.email ?? null;
+  if (!isAdminWriteAllowed(email)) {
     return {
       session: null,
       response: NextResponse.json(

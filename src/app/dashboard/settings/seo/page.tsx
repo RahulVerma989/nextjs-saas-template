@@ -7,7 +7,7 @@ import {
   getTargetHost,
   refreshVerificationStatus,
 } from '@/lib/services/gsc.service';
-import { isDemoMode } from '@/lib/auth/demo';
+import { isDemoMode, isOwnerEmail } from '@/lib/auth/demo';
 import { GSCSettingsClient } from './client';
 
 export const dynamic = 'force-dynamic';
@@ -52,7 +52,7 @@ export default async function SEOSettingsPage() {
         fileContent: conn?.verificationFileContent ?? null,
         dnsRecord: conn?.verificationDnsRecord ?? null,
       }}
-      readOnly={isDemoMode()}
+      readOnly={isDemoMode() && !isOwnerEmail(session.user.email)}
     />
   );
 }
