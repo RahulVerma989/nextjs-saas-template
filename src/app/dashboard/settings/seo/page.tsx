@@ -5,6 +5,7 @@ import { connectDB } from '@/lib/db/connection';
 import {
   getConnection,
   getTargetHost,
+  getApexHost,
   refreshVerificationStatus,
 } from '@/lib/services/gsc.service';
 import { isDemoMode, isOwnerEmail } from '@/lib/auth/demo';
@@ -41,12 +42,14 @@ export default async function SEOSettingsPage() {
       connected={!!conn}
       siteUrl={conn?.siteUrl ?? null}
       targetHost={getTargetHost()}
+      apexHost={getApexHost(getTargetHost())}
       connectedAt={conn?.connectedAt ? new Date(conn.connectedAt).toISOString() : null}
       lastUsedAt={conn?.lastUsedAt ? new Date(conn.lastUsedAt).toISOString() : null}
       lastError={conn?.lastError ?? null}
       verified={!!conn?.verified}
       verification={{
         method: conn?.verificationMethod ?? null,
+        host: conn?.verificationHost ?? null,
         metaToken: conn?.verificationMetaToken ?? null,
         fileName: conn?.verificationFileName ?? null,
         fileContent: conn?.verificationFileContent ?? null,

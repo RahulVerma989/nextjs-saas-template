@@ -33,9 +33,10 @@ export async function GET(req: NextRequest) {
   if (adminCheck.response) return adminCheck.response;
 
   const method = parseMethod(req.nextUrl.searchParams.get('method'));
+  const verifyHost = req.nextUrl.searchParams.get('host') || undefined;
   try {
     if (method) {
-      const conn = await fetchVerificationToken(method);
+      const conn = await fetchVerificationToken(method, verifyHost);
       return NextResponse.json({ success: true, data: { conn } });
     }
     const conn = await refreshVerificationStatus();
