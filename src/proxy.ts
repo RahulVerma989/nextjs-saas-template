@@ -94,6 +94,18 @@ export function proxy(request: NextRequest) {
     return new NextResponse('Not Found', { status: 404 });
   }
 
+  // ─── GSC FILE-method verification rewrite ──────────────────
+  // Google fetches the verification file at the domain root
+  // (`/google<token>.html`).  Rewrite to the API route that pulls
+  // the live token + content from the connection.  Public — Google's
+  // crawler doesn't carry a session.
+  if (/^\/google[a-z0-9]+\.html$/i.test(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/api/integrations/gsc/file/${pathname.slice(1)}`;
+    logRequest(method, pathname, 200, start, 'gsc-verify-file');
+    return NextResponse.rewrite(url);
+  }
+
   const sessionToken = getSessionToken(request);
 
   // Redirect authenticated users from login to dashboard

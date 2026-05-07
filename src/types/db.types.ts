@@ -219,6 +219,8 @@ export interface IServiceRun extends DocBase {
 
 // ─── GSC Connection ─────────────────────────────────────────
 
+export type GSCVerificationMethod = 'META' | 'FILE' | 'DNS_TXT';
+
 export interface IGSCConnection extends DocBase {
   /** Always "singleton" — only one GSC connection per deployment. */
   _id: string;
@@ -232,6 +234,21 @@ export interface IGSCConnection extends DocBase {
   connectedAt: Date;
   lastUsedAt?: Date;
   lastError?: string;
+  /**
+   * Whether the property is currently verified in Google Search Console.
+   * Refreshed on every connect, every manual verify, and every sync.
+   */
+  verified?: boolean;
+  /** Method most recently used to fetch a verification token. */
+  verificationMethod?: GSCVerificationMethod;
+  /** Bare META content value (the part Next.js's metadata.verification.google expects). */
+  verificationMetaToken?: string;
+  /** Filename Google asks you to upload at the domain root for FILE verification. */
+  verificationFileName?: string;
+  /** Body of the file Google asks you to upload (one short string). */
+  verificationFileContent?: string;
+  /** TXT record value to add to DNS for DNS_TXT verification. */
+  verificationDnsRecord?: string;
   createdAt: Date;
   updatedAt: Date;
 }

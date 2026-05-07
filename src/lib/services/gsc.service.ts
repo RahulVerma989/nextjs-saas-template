@@ -1,13 +1,14 @@
 /**
- * Google Search Console + Indexing API helper.
+ * Google Search Console + Indexing API + Site Verification helper.
  *
  * Wraps `googleapis` so the rest of the app doesn't have to know about
- * OAuth refresh, scopes, or the difference between Web Search Indexing
- * and the Search Console URL inspection API.
+ * OAuth refresh, scopes, or the difference between the GSC, Indexing,
+ * and Site Verification APIs.
  *
  * Required scopes (configure on the OAuth consent screen):
  *   - https://www.googleapis.com/auth/webmasters
  *   - https://www.googleapis.com/auth/indexing
+ *   - https://www.googleapis.com/auth/siteverification
  */
 
 import { google } from 'googleapis';
@@ -15,11 +16,12 @@ import { connectDB } from '@/lib/db/connection';
 import { GSCConnection, GSC_CONNECTION_ID } from '@/lib/db/models';
 import { siteConfig } from '@/config/site.config';
 import type { OAuth2Client } from 'google-auth-library';
-import type { IGSCConnection } from '@/types/db.types';
+import type { IGSCConnection, GSCVerificationMethod } from '@/types/db.types';
 
 export const GSC_SCOPES = [
   'https://www.googleapis.com/auth/webmasters',
   'https://www.googleapis.com/auth/indexing',
+  'https://www.googleapis.com/auth/siteverification',
 ] as const;
 
 export const GSC_REDIRECT_URI = `${siteConfig.url}/api/integrations/gsc/callback`;
@@ -39,12 +41,11 @@ export function buildOAuthClient(): OAuth2Client {
   });
 }
 
-/** Generate the consent URL for the SEO settings "Connect" button. */
 export function buildConsentUrl(state: string): string {
   const oauth = buildOAuthClient();
   return oauth.generateAuthUrl({
     access_type: 'offline',
-    prompt: 'consent', // force refresh_token even if previously granted
+    prompt: 'consent',
     scope: [...GSC_SCOPES],
     state,
     include_granted_scopes: true,
@@ -72,8 +73,6 @@ function getDomainCandidates(host: string): string[] {
   const stripped = host.replace(/^www\./, '').toLowerCase();
   const parts = stripped.split('.');
 
-  // Walk up the hierarchy: e.g. template.rahulverma.cc -> ['template.rahulverma.cc', 'rahulverma.cc']
-  // Stop before we hit a single-label TLD (don't match `sc-domain:cc`).
   const domainParents: string[] = [];
   for (let i = 0; i < parts.length - 1; i++) {
     domainParents.push(parts.slice(i).join('.'));
@@ -90,43 +89,49 @@ function getDomainCandidates(host: string): string[] {
   return Array.from(candidates);
 }
 
+type SiteEntry = { siteUrl?: string | null; permissionLevel?: string | null };
+
 /**
  * Find the GSC property that matches `host`, ordered by preference.
- * Returns `null` if the user has nothing verified for the domain.
- *
- * Permission level filter: we only consider properties where the
- * caller is verified — `siteUnverifiedUser` properties cause every
- * subsequent indexing/inspection call to 403 with "User not verified".
+ * If `requireVerified` is true, returns null when nothing verified
+ * matches (used for "is this really set up?" checks).  Otherwise
+ * returns the first matching siteUrl regardless of verification —
+ * useful when we just added the property and need its identifier.
  */
-export function findVerifiedSiteForHost(
-  sites: Array<{ siteUrl?: string | null; permissionLevel?: string | null }>,
+export function findSiteForHost(
+  sites: SiteEntry[],
   host: string,
+  requireVerified = true,
 ): string | null {
   const candidates = getDomainCandidates(host);
   for (const candidate of candidates) {
-    const match = sites.find(
-      (s) =>
-        (s.siteUrl ?? '').toLowerCase() === candidate &&
-        s.permissionLevel &&
-        s.permissionLevel !== 'siteUnverifiedUser',
-    );
+    const match = sites.find((s) => {
+      if ((s.siteUrl ?? '').toLowerCase() !== candidate) return false;
+      if (!requireVerified) return true;
+      return !!s.permissionLevel && s.permissionLevel !== 'siteUnverifiedUser';
+    });
     if (match?.siteUrl) return match.siteUrl;
   }
   return null;
 }
 
+/** Back-compat alias — old callers pass already-filtered verified sites. */
+export function findVerifiedSiteForHost(
+  sites: SiteEntry[],
+  host: string,
+): string | null {
+  return findSiteForHost(sites, host, true);
+}
+
 /**
- * Attempt to add a GSC property for `host`.  Tries the apex
- * `sc-domain:` form first (covers all subdomains + protocols, the
- * pattern Quillly uses) and falls back to a URL-prefix property if
- * the domain form is rejected.
- *
- * Adding doesn't verify ownership — the property will land in
- * `siteUnverifiedUser` state until the user proves ownership in
- * Search Console.  We don't auto-verify here because verification
- * needs DNS/HTML control we may not have on the deployment domain.
+ * Add a GSC property for `host`.  Tries `sc-domain:` first (covers
+ * subdomains + protocols) and falls back to URL-prefix if Google
+ * rejects the domain form (e.g. account can't add domain properties).
  */
-async function addGSCSite(oauth: OAuth2Client, host: string): Promise<string> {
+export async function addGSCSite(
+  oauth: OAuth2Client,
+  host: string,
+): Promise<string> {
   const stripped = host.replace(/^www\./, '');
   const webmasters = google.webmasters({ version: 'v3', auth: oauth });
 
@@ -135,8 +140,7 @@ async function addGSCSite(oauth: OAuth2Client, host: string): Promise<string> {
     await webmasters.sites.add({ siteUrl: domainSiteUrl });
     return domainSiteUrl;
   } catch {
-    // Domain property may be rejected (no DNS verification path);
-    // fall through to URL-prefix.
+    // Domain property may be rejected; fall through.
   }
 
   const urlSiteUrl = `https://${stripped}/`;
@@ -145,22 +149,43 @@ async function addGSCSite(oauth: OAuth2Client, host: string): Promise<string> {
 }
 
 /**
+ * Find or create the GSC property for `host`.  Returns:
+ *   - `siteUrl`  : the property identifier we'll save
+ *   - `verified` : whether the user is verified on it right now
+ *   - `created`  : whether we just added it (verification still needed)
+ */
+async function findOrCreateSiteForHost(
+  oauth: OAuth2Client,
+  host: string,
+): Promise<{ siteUrl: string; verified: boolean; created: boolean }> {
+  const webmasters = google.webmasters({ version: 'v3', auth: oauth });
+  const list = await webmasters.sites.list();
+  const sites = list.data.siteEntry ?? [];
+
+  const verified = findSiteForHost(sites, host, true);
+  if (verified) return { siteUrl: verified, verified: true, created: false };
+
+  // Maybe the user has it but unverified — we'll surface that as-is so
+  // the verify flow can pick up where they left off.
+  const anyMatch = findSiteForHost(sites, host, false);
+  if (anyMatch) return { siteUrl: anyMatch, verified: false, created: false };
+
+  // Nothing for this host — try to add it.
+  const created = await addGSCSite(oauth, host);
+  return { siteUrl: created, verified: false, created: true };
+}
+
+/**
  * Exchange the OAuth code for tokens and persist the connection.
  *
- * Property selection (Quillly-style):
- *   1. List the user's GSC properties.
- *   2. Prefer the verified property whose host matches `siteConfig.url`
- *      (sc-domain first, walking up parents, then URL-prefix variants).
- *   3. If a `preferredSiteUrl` is supplied AND it's verified, that wins.
- *   4. If nothing verified matches the deployment domain, we DON'T
- *      silently pick someone else's domain — that's how the template
- *      ended up connected to `sc-domain:ringtrue.app`.  Instead we
- *      surface a precise error pointing at the host we're looking for.
+ * If the user has a verified property for `siteConfig.url`'s host, we
+ * pick it.  Otherwise we (a) auto-create the property in their GSC
+ * account, (b) save the connection in `verified=false` state, and
+ * (c) let the SEO settings UI guide them through verification.
  */
 export async function exchangeCodeAndStore(args: {
   code: string;
   userId: string;
-  preferredSiteUrl?: string;
 }): Promise<IGSCConnection> {
   const oauth = buildOAuthClient();
   const { tokens } = await oauth.getToken(args.code);
@@ -171,60 +196,22 @@ export async function exchangeCodeAndStore(args: {
   }
   oauth.setCredentials(tokens);
 
-  const sites = await google
-    .webmasters({ version: 'v3', auth: oauth })
-    .sites.list();
-  const allSites = sites.data.siteEntry ?? [];
-  const verified = allSites.filter(
-    (s) => s.permissionLevel && s.permissionLevel !== 'siteUnverifiedUser',
-  );
-
   const host = getTargetHost();
-  let chosen: string | null = null;
-
-  // 1. Caller override (e.g. admin re-picking from a dropdown later).
-  if (args.preferredSiteUrl) {
-    const match = verified.find((v) => v.siteUrl === args.preferredSiteUrl);
-    if (match?.siteUrl) chosen = match.siteUrl;
-  }
-
-  // 2. Match by deployment host.
-  if (!chosen) {
-    chosen = findVerifiedSiteForHost(verified, host);
-  }
-
-  if (!chosen) {
-    if (verified.length === 0) {
-      throw new Error(
-        `No verified Search Console properties found on this Google account. ` +
-          `Add and verify "${host}" (or its apex domain) at ` +
-          `https://search.google.com/search-console first.`,
-      );
-    }
-
-    const have = verified
-      .map((s) => s.siteUrl)
-      .filter(Boolean)
-      .join(', ');
-    throw new Error(
-      `None of your verified Search Console properties match ${host}. ` +
-        `This account is verified for: ${have}. ` +
-        `Add and verify "${host}" (or its apex) in Search Console, then retry.`,
-    );
-  }
+  const { siteUrl, verified } = await findOrCreateSiteForHost(oauth, host);
 
   await connectDB();
   const conn = await GSCConnection.findByIdAndUpdate(
     GSC_CONNECTION_ID,
     {
       _id: GSC_CONNECTION_ID,
-      siteUrl: chosen,
+      siteUrl,
       refreshToken: tokens.refresh_token,
       accessToken: tokens.access_token,
       accessTokenExpiresAt: new Date(tokens.expiry_date),
       scopes: tokens.scope?.split(' ') ?? [...GSC_SCOPES],
       connectedByUserId: args.userId,
       connectedAt: new Date(),
+      verified,
       lastError: undefined,
     },
     { upsert: true, new: true, setDefaultsOnInsert: true },
@@ -235,8 +222,8 @@ export async function exchangeCodeAndStore(args: {
 }
 
 /**
- * List every GSC property the user has access to.  Used by the
- * settings UI to let admins re-pick if the auto-match got it wrong.
+ * List every GSC property the connected account has access to.
+ * Used by the settings UI to populate the property switcher.
  */
 export async function listSites(): Promise<
   Array<{ siteUrl: string; permissionLevel: string; verified: boolean }>
@@ -251,10 +238,7 @@ export async function listSites(): Promise<
   }));
 }
 
-/**
- * Switch the active GSC property for an already-connected account.
- * Validates that the user is verified on `siteUrl` before saving.
- */
+/** Switch the active property — only verified targets allowed. */
 export async function setActiveSite(siteUrl: string): Promise<IGSCConnection> {
   const sites = await listSites();
   const match = sites.find((s) => s.siteUrl === siteUrl && s.verified);
@@ -266,7 +250,7 @@ export async function setActiveSite(siteUrl: string): Promise<IGSCConnection> {
   await connectDB();
   const conn = await GSCConnection.findByIdAndUpdate(
     GSC_CONNECTION_ID,
-    { siteUrl, lastError: undefined },
+    { siteUrl, verified: true, lastError: undefined },
     { new: true },
   ).lean<IGSCConnection>();
   if (!conn) throw new Error('GSC is not connected');
@@ -284,9 +268,152 @@ export async function disconnect(): Promise<void> {
 }
 
 /**
- * Build an authenticated OAuth2 client from the stored connection,
- * refreshing the access token if it's expired.
+ * Refresh `verified` from GSC — call this on the settings page render
+ * so the UI flips to "verified" the moment Google approves the proof.
  */
+export async function refreshVerificationStatus(): Promise<IGSCConnection | null> {
+  const conn = await getConnection();
+  if (!conn) return null;
+
+  try {
+    const { auth } = await getAuthedClient();
+    const list = await google.webmasters({ version: 'v3', auth }).sites.list();
+    const sites = list.data.siteEntry ?? [];
+    const match = sites.find((s) => s.siteUrl === conn.siteUrl);
+    const verified =
+      !!match?.permissionLevel &&
+      match.permissionLevel !== 'siteUnverifiedUser';
+    if (verified !== !!conn.verified) {
+      await connectDB();
+      return GSCConnection.findByIdAndUpdate(
+        GSC_CONNECTION_ID,
+        { verified },
+        { new: true },
+      ).lean<IGSCConnection>();
+    }
+    return conn;
+  } catch {
+    return conn;
+  }
+}
+
+// ─── Site verification ────────────────────────────────────────
+
+/**
+ * Extract the bare `content="..."` value from a META verification token.
+ *
+ * Google returns the *full* HTML meta tag for METHOD=META, but Next.js's
+ * `metadata.verification.google` wraps whatever you pass in its own
+ * meta element — passing the full tag produces a doubly-wrapped, HTML-
+ * escaped tag that Google's crawler can't match.
+ */
+export function extractMetaContent(token: string): string {
+  if (!token) return token;
+  const match = token.match(/content\s*=\s*["']([^"']+)["']/i);
+  return match ? match[1] : token;
+}
+
+function siteForVerification(host: string, method: GSCVerificationMethod) {
+  const stripped = host.replace(/^www\./, '');
+  if (method === 'DNS_TXT') {
+    return { type: 'INET_DOMAIN' as const, identifier: stripped };
+  }
+  return { type: 'SITE' as const, identifier: `https://${stripped}/` };
+}
+
+/**
+ * Fetch a verification token from Google for the chosen method and
+ * persist the relevant fields on the connection so the settings UI
+ * (and metadata.verification.google) can render them.
+ */
+export async function fetchVerificationToken(
+  method: GSCVerificationMethod,
+): Promise<IGSCConnection> {
+  const { auth } = await getAuthedClient();
+  const host = getTargetHost();
+  const stripped = host.replace(/^www\./, '');
+  const sv = google.siteVerification({ version: 'v1', auth });
+
+  const res = await sv.webResource.getToken({
+    requestBody: {
+      site: siteForVerification(host, method),
+      verificationMethod: method,
+    },
+  });
+  const rawToken = res.data.token ?? '';
+  if (!rawToken) {
+    throw new Error('Google did not return a verification token. Try a different method.');
+  }
+
+  const update: Partial<IGSCConnection> = { verificationMethod: method };
+  if (method === 'META') {
+    update.verificationMetaToken = extractMetaContent(rawToken);
+    update.verificationFileName = undefined;
+    update.verificationFileContent = undefined;
+    update.verificationDnsRecord = undefined;
+  } else if (method === 'FILE') {
+    update.verificationFileName = rawToken;
+    update.verificationFileContent = `google-site-verification: ${rawToken}`;
+    update.verificationMetaToken = undefined;
+    update.verificationDnsRecord = undefined;
+  } else {
+    update.verificationDnsRecord = rawToken;
+    update.verificationMetaToken = undefined;
+    update.verificationFileName = undefined;
+    update.verificationFileContent = undefined;
+  }
+  // Mongoose doesn't unset fields when given `undefined` via update —
+  // strip them out and use $unset for fields we want to clear.
+  const $set: Record<string, unknown> = {};
+  const $unset: Record<string, ''> = {};
+  for (const [k, v] of Object.entries(update)) {
+    if (v === undefined) $unset[k] = '';
+    else $set[k] = v;
+  }
+
+  await connectDB();
+  const conn = await GSCConnection.findByIdAndUpdate(
+    GSC_CONNECTION_ID,
+    { $set, $unset },
+    { new: true },
+  ).lean<IGSCConnection>();
+  if (!conn) throw new Error('GSC is not connected');
+  void stripped;
+  return conn;
+}
+
+/**
+ * Ask Google to verify ownership using the chosen method.  The token
+ * must already be live on the user's site/DNS — this just kicks off
+ * Google's check.  Returns the (now possibly verified) connection.
+ */
+export async function runVerification(
+  method: GSCVerificationMethod,
+): Promise<{ verified: boolean; error?: string; conn: IGSCConnection | null }> {
+  const { auth } = await getAuthedClient();
+  const host = getTargetHost();
+  const sv = google.siteVerification({ version: 'v1', auth });
+  try {
+    await sv.webResource.insert({
+      verificationMethod: method,
+      requestBody: { site: siteForVerification(host, method) },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Verification failed';
+    await connectDB();
+    await GSCConnection.findByIdAndUpdate(GSC_CONNECTION_ID, {
+      lastError: message,
+    });
+    const conn = await getConnection();
+    return { verified: false, error: message, conn };
+  }
+
+  const conn = await refreshVerificationStatus();
+  return { verified: !!conn?.verified, conn };
+}
+
+// ─── Indexing API ─────────────────────────────────────────────
+
 async function getAuthedClient(): Promise<{ auth: OAuth2Client; conn: IGSCConnection }> {
   const conn = await getConnection();
   if (!conn) throw new Error('GSC is not connected');
@@ -298,9 +425,6 @@ async function getAuthedClient(): Promise<{ auth: OAuth2Client; conn: IGSCConnec
     expiry_date: new Date(conn.accessTokenExpiresAt).getTime(),
   });
 
-  // googleapis automatically refreshes when expiry_date is past, but
-  // we persist the refreshed token so other replicas don't burn through
-  // refresh quota.
   oauth.on('tokens', (newTokens) => {
     if (newTokens.access_token && newTokens.expiry_date) {
       void connectDB().then(() =>
@@ -319,10 +443,6 @@ async function getAuthedClient(): Promise<{ auth: OAuth2Client; conn: IGSCConnec
   return { auth: oauth, conn };
 }
 
-/**
- * Submit a URL_UPDATED notification to the Indexing API.
- * Returns the timestamp Google recorded for the notification.
- */
 export async function submitUrlUpdated(url: string): Promise<Date> {
   const { auth } = await getAuthedClient();
   const indexing = google.indexing({ version: 'v3', auth });
@@ -332,7 +452,6 @@ export async function submitUrlUpdated(url: string): Promise<Date> {
   return new Date(res.data.urlNotificationMetadata?.latestUpdate?.notifyTime ?? Date.now());
 }
 
-/** Submit a URL_DELETED notification (for removed marketing pages). */
 export async function submitUrlDeleted(url: string): Promise<Date> {
   const { auth } = await getAuthedClient();
   const indexing = google.indexing({ version: 'v3', auth });
@@ -342,7 +461,6 @@ export async function submitUrlDeleted(url: string): Promise<Date> {
   return new Date(res.data.urlNotificationMetadata?.latestRemove?.notifyTime ?? Date.now());
 }
 
-/** Inspect a URL's coverage state via the Search Console URL Inspection API. */
 export async function inspectUrl(url: string): Promise<{
   coverageState?: string;
   indexed: boolean;

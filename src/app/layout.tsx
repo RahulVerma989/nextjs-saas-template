@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { siteConfig } from '@/config/site.config';
 import { ThemeProvider } from '@/context/theme-context';
+import { getGSCVerificationSnapshot } from '@/lib/services/gsc-meta';
 import './globals.css';
 
 // Geist + Geist Mono — pairs with the OKLCH theme.  --font-sans /
@@ -16,7 +17,19 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  // Pulls the GSC META verification token from the connection (60s cached)
+  // so a freshly-issued META token shows up in <head> without a redeploy.
+  const { metaToken } = await getGSCVerificationSnapshot();
+  return {
+  ...baseMetadata,
+  verification: metaToken
+    ? { ...(baseMetadata.verification ?? {}), google: metaToken }
+    : baseMetadata.verification,
+  };
+}
+
+const baseMetadata: Metadata = {
   title: {
     default: siteConfig.name,
     template: `%s | ${siteConfig.name}`,

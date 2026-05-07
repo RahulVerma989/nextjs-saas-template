@@ -25,6 +25,13 @@ const GSCConnectionSchema = new Schema<IGSCConnection>(
     connectedAt: { type: Date, required: true, default: Date.now },
     lastUsedAt: { type: Date },
     lastError: { type: String },
+    /** Verification state — refreshed on connect/verify/sync. */
+    verified: { type: Boolean, default: false },
+    verificationMethod: { type: String, enum: ['META', 'FILE', 'DNS_TXT'] },
+    verificationMetaToken: { type: String },
+    verificationFileName: { type: String },
+    verificationFileContent: { type: String },
+    verificationDnsRecord: { type: String },
   },
   { timestamps: true, collection: 'gsc_connections' },
 );
