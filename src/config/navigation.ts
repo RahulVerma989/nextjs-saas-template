@@ -15,6 +15,7 @@ import {
   Bell,
   Search,
   Users,
+  ListChecks,
   type LucideIcon,
 } from 'lucide-react';
 import { siteConfig } from './site.config';
@@ -82,15 +83,22 @@ function buildAdminNavigation(): NavItem[] {
     );
   }
 
-  // SEO settings — admin-only, only when GSC indexing is enabled.
-  // Lives under settings (`/dashboard/settings/seo`) but surfaced in
-  // the admin section so non-admins don't see a dead-end link.
+  // SEO + page-indexing — admin-only, only when GSC indexing is
+  // enabled.  SEO is the connection / verification page; Page Indexing
+  // is the per-route status table.
   if (siteConfig.features.gscIndexing) {
-    items.push({
-      name: 'SEO',
-      href: '/dashboard/settings/seo',
-      icon: Search,
-    });
+    items.push(
+      {
+        name: 'SEO',
+        href: '/dashboard/settings/seo',
+        icon: Search,
+      },
+      {
+        name: 'Page Indexing',
+        href: '/dashboard/admin/page-indexing',
+        icon: ListChecks,
+      },
+    );
   }
 
   return items;

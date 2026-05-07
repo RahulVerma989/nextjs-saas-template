@@ -2,20 +2,21 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth/auth';
 import { siteConfig } from '@/config/site.config';
 import { connectDB } from '@/lib/db/connection';
-import { getConnection, getTargetHost } from '@/lib/services/gsc.service';
-import { PageIndex } from '@/lib/db/models';
+import {
+  getConnection,
+  getTargetHost,
+  refreshVerificationStatus,
+} from '@/lib/services/gsc.service';
 import { isDemoMode } from '@/lib/auth/demo';
 import { GSCSettingsClient } from './client';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Admin-only SEO settings page.  Lets the deployment owner connect
- * a Google Search Console property so the page-indexing job can
- * auto-submit changed marketing pages to Google's Indexing API.
- *
- * Per-user isn't useful here — there's only one site to index, so
- * we store one site-wide connection and gate the UI on `roles=admin`.
+ * Admin-only SEO settings page.  Lets the deployment owner connect a
+ * Google Search Console property, verify ownership, and switch the
+ * active property.  Per-page indexing stats live on a separate admin
+ * page (`/dashboard/admin/page-indexing`).
  */
 export default async function SEOSettingsPage() {
   if (!siteConfig.features.gscIndexing) {
@@ -31,21 +32,9 @@ export default async function SEOSettingsPage() {
   if (!isAdmin) redirect('/dashboard/settings');
 
   await connectDB();
-  const conn = await getConnection();
-  const [submitted, indexed, notIndexed, errored, total, pages] =
-    await Promise.all([
-      PageIndex.countDocuments({ status: 'submitted' }),
-      PageIndex.countDocuments({ status: 'indexed' }),
-      PageIndex.countDocuments({ status: 'not_indexed' }),
-      PageIndex.countDocuments({ status: 'error' }),
-      PageIndex.countDocuments({}),
-      // The full per-page status table — used to render the table
-      // beneath the stats so admins can see which routes are stuck.
-      PageIndex.find({})
-        .sort({ updatedAt: -1 })
-        .limit(200)
-        .lean(),
-    ]);
+  // Refresh verification status on every render so the UI flips to
+  // "verified" the moment Google approves the proof — no manual reload.
+  const conn = (await refreshVerificationStatus()) ?? (await getConnection());
 
   return (
     <GSCSettingsClient
@@ -55,20 +44,15 @@ export default async function SEOSettingsPage() {
       connectedAt={conn?.connectedAt ? new Date(conn.connectedAt).toISOString() : null}
       lastUsedAt={conn?.lastUsedAt ? new Date(conn.lastUsedAt).toISOString() : null}
       lastError={conn?.lastError ?? null}
-      stats={{ submitted, indexed, notIndexed, errored, total }}
+      verified={!!conn?.verified}
+      verification={{
+        method: conn?.verificationMethod ?? null,
+        metaToken: conn?.verificationMetaToken ?? null,
+        fileName: conn?.verificationFileName ?? null,
+        fileContent: conn?.verificationFileContent ?? null,
+        dnsRecord: conn?.verificationDnsRecord ?? null,
+      }}
       readOnly={isDemoMode()}
-      pages={pages.map((p) => ({
-        path: p._id,
-        status: p.status,
-        coverageState: p.coverageState ?? null,
-        submittedAt: p.submittedAt
-          ? new Date(p.submittedAt).toISOString()
-          : null,
-        inspectedAt: p.inspectedAt
-          ? new Date(p.inspectedAt).toISOString()
-          : null,
-        lastError: p.lastError ?? null,
-      }))}
     />
   );
 }

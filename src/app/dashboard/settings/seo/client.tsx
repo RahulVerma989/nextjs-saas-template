@@ -2,24 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircle2, AlertCircle, Loader2, Copy, ExternalLink } from 'lucide-react';
 
-interface Stats {
-  submitted: number;
-  indexed: number;
-  notIndexed: number;
-  errored: number;
-  total: number;
-}
-
-interface PageRow {
-  path: string;
-  status: string;
-  coverageState: string | null;
-  submittedAt: string | null;
-  inspectedAt: string | null;
-  lastError: string | null;
-}
+type Method = 'META' | 'FILE' | 'DNS_TXT';
 
 interface SiteOption {
   siteUrl: string;
@@ -27,41 +13,51 @@ interface SiteOption {
   verified: boolean;
 }
 
+interface Verification {
+  method: Method | null;
+  metaToken: string | null;
+  fileName: string | null;
+  fileContent: string | null;
+  dnsRecord: string | null;
+}
+
 interface Props {
   connected: boolean;
   siteUrl: string | null;
-  /** Host derived from siteConfig.url — what the auto-match looks for. */
   targetHost: string;
   connectedAt: string | null;
   lastUsedAt: string | null;
   lastError: string | null;
-  stats: Stats;
-  pages: PageRow[];
-  /** Demo mode disables all writes (sync, switch, disconnect). */
+  verified: boolean;
+  verification: Verification;
   readOnly: boolean;
 }
 
 export function GSCSettingsClient(props: Props) {
   const router = useRouter();
   const search = useSearchParams();
-  const [banner, setBanner] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
-  const [busy, setBusy] = useState<'disconnect' | 'sync' | 'switch' | null>(null);
+  const [banner, setBanner] = useState<{ kind: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [busy, setBusy] = useState<'disconnect' | 'switch' | 'fetch' | 'verify' | null>(null);
   const [sites, setSites] = useState<SiteOption[] | null>(null);
   const [sitesLoaded, setSitesLoaded] = useState(false);
+  const [method, setMethod] = useState<Method>(props.verification.method ?? 'META');
 
   useEffect(() => {
     const status = search.get('gsc');
     if (!status) return;
     if (status === 'connected') {
-      setBanner({ kind: 'success', text: 'Search Console connected successfully.' });
+      setBanner({
+        kind: 'success',
+        text: props.verified
+          ? 'Search Console connected and verified.'
+          : 'Search Console connected. Now verify ownership of the property below.',
+      });
     } else if (status.startsWith('error:')) {
       const reason = decodeURIComponent(status.slice('error:'.length));
       setBanner({ kind: 'error', text: `Couldn't connect: ${reason}` });
     }
-  }, [search]);
+  }, [search, props.verified]);
 
-  // Lazy-load the property list when connected so the switcher dropdown
-  // shows up.  Skip in demo mode — the picker is read-only there anyway.
   useEffect(() => {
     if (!props.connected || sitesLoaded) return;
     setSitesLoaded(true);
@@ -78,9 +74,8 @@ export function GSCSettingsClient(props: Props) {
       !confirm(
         'Disconnect Search Console? Submitted pages will stop receiving updates until you reconnect.',
       )
-    ) {
+    )
       return;
-    }
     setBusy('disconnect');
     try {
       const res = await fetch('/api/integrations/gsc', { method: 'DELETE' });
@@ -89,30 +84,6 @@ export function GSCSettingsClient(props: Props) {
       } else {
         setBanner({ kind: 'error', text: 'Failed to disconnect.' });
       }
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleSync = async () => {
-    setBusy('sync');
-    setBanner(null);
-    try {
-      const res = await fetch('/api/integrations/gsc/sync', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        const r = data.data;
-        const note =
-          r.skipped
-            ? `Sync skipped — ${r.skipped}.`
-            : `Sync done — submitted ${r.submitted}, inspected ${r.inspected}, errors ${r.errors}.`;
-        setBanner({ kind: 'success', text: note });
-        router.refresh();
-      } else {
-        setBanner({ kind: 'error', text: data.error ?? 'Sync failed' });
-      }
-    } catch {
-      setBanner({ kind: 'error', text: 'Sync failed (network error)' });
     } finally {
       setBusy(null);
     }
@@ -140,16 +111,58 @@ export function GSCSettingsClient(props: Props) {
     }
   };
 
+  const handleFetchToken = async (m: Method) => {
+    setBusy('fetch');
+    setBanner(null);
+    try {
+      const res = await fetch(`/api/integrations/gsc/verify?method=${m}`);
+      const data = await res.json();
+      if (data.success) {
+        setMethod(m);
+        setBanner({ kind: 'info', text: `Fetched a fresh ${m} token. Place it on your site, then click "Verify ownership".` });
+        router.refresh();
+      } else {
+        setBanner({ kind: 'error', text: data.error ?? 'Failed to fetch token' });
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleVerify = async () => {
+    setBusy('verify');
+    setBanner(null);
+    try {
+      const res = await fetch('/api/integrations/gsc/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBanner({ kind: 'success', text: 'Ownership verified! You can now run page-indexing.' });
+        router.refresh();
+      } else {
+        setBanner({ kind: 'error', text: data.error ?? 'Verification failed' });
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const verifiedSites = (sites ?? []).filter((s) => s.verified);
 
   return (
     <div className="max-w-4xl">
       <h1 className="text-2xl font-bold mb-2">Search Engine Optimization</h1>
       <p className="text-sm text-muted-foreground mb-6">
-        Connect Google Search Console so the background worker can auto-submit
-        changed marketing pages to Google&apos;s Indexing API. New and updated
-        pages get picked up by Google within hours instead of days, and you
-        don&apos;t have to do anything.
+        Connect Google Search Console so this deployment can auto-submit
+        marketing pages to Google&apos;s Indexing API. Per-page status lives
+        on the{' '}
+        <Link href="/dashboard/admin/page-indexing" className="underline">
+          Page Indexing
+        </Link>{' '}
+        admin page.
       </p>
 
       {banner && (
@@ -157,28 +170,43 @@ export function GSCSettingsClient(props: Props) {
           className={`mb-6 rounded-lg border px-4 py-3 text-sm ${
             banner.kind === 'success'
               ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-200'
-              : 'border-destructive/30 bg-destructive/10 text-destructive'
+              : banner.kind === 'info'
+                ? 'border-primary/30 bg-primary/5 text-foreground'
+                : 'border-destructive/30 bg-destructive/10 text-destructive'
           }`}
         >
           {banner.text}
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-card p-6">
+      <div className="rounded-xl border border-border bg-card p-6 mb-6">
         <h2 className="text-lg font-semibold mb-4">Google Search Console</h2>
 
         <div className="mb-4 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           Auto-matching against host{' '}
           <code className="font-mono text-foreground">{props.targetHost}</code>
-          . The match prefers a verified <code>sc-domain:</code> property
-          (covering all subdomains), then walks up to its apex, then URL-prefix
-          variants.
+          . On connect we look for an existing verified property; if there
+          isn&apos;t one we add{' '}
+          <code className="font-mono">sc-domain:{props.targetHost.replace(/^www\./, '')}</code>{' '}
+          to your account and walk you through verification.
         </div>
 
         {props.connected ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <Field label="Property" value={props.siteUrl ?? '—'} mono />
+              <Field
+                label="Status"
+                value={props.verified ? 'Verified' : 'Awaiting verification'}
+                tone={props.verified ? 'positive' : 'warning'}
+                icon={
+                  props.verified ? (
+                    <CheckCircle2 className="h-4 w-4" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4" />
+                  )
+                }
+              />
               <Field
                 label="Connected"
                 value={props.connectedAt ? new Date(props.connectedAt).toLocaleString() : '—'}
@@ -192,7 +220,6 @@ export function GSCSettingsClient(props: Props) {
               )}
             </div>
 
-            {/* Property switcher */}
             {verifiedSites.length > 1 && (
               <div>
                 <label className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -211,41 +238,12 @@ export function GSCSettingsClient(props: Props) {
                   ))}
                 </select>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Pick a different verified property if the auto-match got it
-                  wrong.
+                  Pick a different verified property if the auto-match got it wrong.
                 </p>
               </div>
             )}
 
-            <div>
-              <h3 className="text-sm font-semibold mb-2">Indexing status</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
-                <Stat label="Tracked" value={props.stats.total} />
-                <Stat label="Submitted" value={props.stats.submitted} />
-                <Stat label="Indexed" value={props.stats.indexed} tone="positive" />
-                <Stat label="Not indexed" value={props.stats.notIndexed} tone="muted" />
-                <Stat label="Errored" value={props.stats.errored} tone="negative" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-3">
-                Counts come from the page-indexing job, which runs every 30 minutes
-                and on every deploy. Routes are pulled from <code>src/config/indexable-routes.ts</code>.
-              </p>
-            </div>
-
             <div className="flex flex-wrap gap-2 pt-2">
-              <button
-                type="button"
-                onClick={handleSync}
-                disabled={props.readOnly || busy !== null}
-                className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-              >
-                {busy === 'sync' ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                Run sync now
-              </button>
               <a
                 href="/api/integrations/gsc/connect"
                 className="border border-border px-4 py-2 rounded-lg text-sm font-medium hover:bg-accent transition-colors"
@@ -265,48 +263,12 @@ export function GSCSettingsClient(props: Props) {
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Sign in with the Google account that owns your Search Console property
-              and grant the <code>webmasters</code> + <code>indexing</code> scopes.
-              We&apos;ll auto-pick the verified property that matches{' '}
-              <code className="font-mono">{props.targetHost}</code>.
+              Sign in with the Google account that should manage this
+              deployment&apos;s SEO. We&apos;ll request the{' '}
+              <code>webmasters</code>, <code>indexing</code>, and{' '}
+              <code>siteverification</code> scopes so we can add and verify the
+              property on your behalf.
             </p>
-
-            <details className="text-sm">
-              <summary className="cursor-pointer font-medium">
-                Setup checklist
-              </summary>
-              <ol className="list-decimal pl-5 mt-2 space-y-1 text-muted-foreground">
-                <li>
-                  Verify <code>{props.targetHost}</code> (or its apex domain) at{' '}
-                  <a
-                    className="text-primary underline"
-                    href="https://search.google.com/search-console"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    search.google.com/search-console
-                  </a>
-                  . A <code>sc-domain</code> property covers all subdomains.
-                </li>
-                <li>
-                  In Google Cloud Console, enable the{' '}
-                  <em>Search Console API</em> and the{' '}
-                  <em>Web Search Indexing API</em>.
-                </li>
-                <li>
-                  On your OAuth consent screen, add the scopes
-                  <code> https://www.googleapis.com/auth/webmasters </code>
-                  and
-                  <code> https://www.googleapis.com/auth/indexing</code>.
-                </li>
-                <li>
-                  Add the redirect URI{' '}
-                  <code>{typeof window !== 'undefined' ? `${window.location.origin}/api/integrations/gsc/callback` : '/api/integrations/gsc/callback'}</code>
-                  .
-                </li>
-              </ol>
-            </details>
-
             <a
               href="/api/integrations/gsc/connect"
               className="inline-block bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
@@ -317,54 +279,252 @@ export function GSCSettingsClient(props: Props) {
         )}
       </div>
 
-      {/* Per-page indexing table */}
-      {props.connected && props.pages.length > 0 && (
-        <div className="mt-6 rounded-xl border border-border bg-card overflow-hidden">
-          <div className="px-5 py-3 border-b border-border">
-            <h2 className="text-sm font-semibold">Per-page status</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {props.pages.length} tracked routes — newest activity first.
-            </p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-left">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Path</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Coverage</th>
-                  <th className="px-4 py-2 font-medium">Submitted</th>
-                  <th className="px-4 py-2 font-medium">Inspected</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {props.pages.map((p) => (
-                  <tr key={p.path} className="hover:bg-accent/20 transition-colors">
-                    <td className="px-4 py-2 font-mono text-xs">{p.path}</td>
-                    <td className="px-4 py-2 text-xs">
-                      <StatusPill status={p.status} />
-                      {p.lastError && (
-                        <div className="text-[11px] text-destructive mt-1 max-w-xs truncate" title={p.lastError}>
-                          {p.lastError}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">
-                      {p.coverageState ?? '—'}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">
-                      {p.submittedAt ? new Date(p.submittedAt).toLocaleString() : '—'}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">
-                      {p.inspectedAt ? new Date(p.inspectedAt).toLocaleString() : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Verification panel — only shown when connected but not yet verified */}
+      {props.connected && !props.verified && (
+        <VerificationPanel
+          method={method}
+          setMethod={setMethod}
+          verification={props.verification}
+          targetHost={props.targetHost}
+          siteUrl={props.siteUrl}
+          readOnly={props.readOnly}
+          busy={busy}
+          onFetchToken={handleFetchToken}
+          onVerify={handleVerify}
+        />
+      )}
+    </div>
+  );
+}
+
+function VerificationPanel({
+  method,
+  setMethod,
+  verification,
+  targetHost,
+  siteUrl,
+  readOnly,
+  busy,
+  onFetchToken,
+  onVerify,
+}: {
+  method: Method;
+  setMethod: (m: Method) => void;
+  verification: Verification;
+  targetHost: string;
+  siteUrl: string | null;
+  readOnly: boolean;
+  busy: 'disconnect' | 'switch' | 'fetch' | 'verify' | null;
+  onFetchToken: (m: Method) => void;
+  onVerify: () => void;
+}) {
+  const apex = targetHost.replace(/^www\./, '');
+  const haveToken =
+    (method === 'META' && verification.metaToken) ||
+    (method === 'FILE' && verification.fileName) ||
+    (method === 'DNS_TXT' && verification.dnsRecord);
+
+  return (
+    <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-6">
+      <h2 className="text-lg font-semibold mb-2">Verify ownership</h2>
+      <p className="text-sm text-muted-foreground mb-4">
+        Google needs proof that you own{' '}
+        <code className="font-mono">{siteUrl ?? targetHost}</code> before it
+        accepts indexing requests. Pick a method, place the token, then hit{' '}
+        <em>Verify ownership</em> — we&apos;ll ask Google to check.
+      </p>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        {(['META', 'FILE', 'DNS_TXT'] as Method[]).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMethod(m)}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+              method === m
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background border-border hover:bg-accent'
+            }`}
+          >
+            {m === 'DNS_TXT' ? 'DNS TXT' : m === 'META' ? 'Meta tag' : 'HTML file'}
+          </button>
+        ))}
+      </div>
+
+      {!haveToken ? (
+        <div className="space-y-3">
+          <p className="text-sm">
+            Click below to fetch a fresh token for the{' '}
+            <strong>{method === 'DNS_TXT' ? 'DNS TXT' : method === 'META' ? 'Meta tag' : 'HTML file'}</strong>{' '}
+            method.
+          </p>
+          <button
+            type="button"
+            onClick={() => onFetchToken(method)}
+            disabled={readOnly || busy !== null}
+            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+          >
+            {busy === 'fetch' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Get verification token
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {method === 'META' && verification.metaToken && (
+            <Instructions
+              steps={[
+                <>
+                  This template auto-injects the meta tag into the homepage{' '}
+                  <code>&lt;head&gt;</code> for you. Once you&apos;ve redeployed
+                  (or after up to 60s of cache), the tag will be live.
+                </>,
+                <>
+                  Confirm by viewing source on{' '}
+                  <a
+                    className="underline"
+                    href={`https://${targetHost}/`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    https://{targetHost}/
+                  </a>{' '}
+                  — you should see:
+                </>,
+              ]}
+            >
+              <CodeBlock
+                value={`<meta name="google-site-verification" content="${verification.metaToken}" />`}
+              />
+            </Instructions>
+          )}
+
+          {method === 'FILE' && verification.fileName && (
+            <Instructions
+              steps={[
+                <>
+                  This template serves the verification file automatically at{' '}
+                  <code>/{verification.fileName}</code> via a proxy rewrite.
+                  After redeploying it will be reachable at:
+                </>,
+              ]}
+            >
+              <CodeBlock value={`https://${targetHost}/${verification.fileName}`} link />
+              <p className="text-xs text-muted-foreground">
+                File contents (already wired into the route handler):
+              </p>
+              <CodeBlock value={verification.fileContent ?? ''} />
+            </Instructions>
+          )}
+
+          {method === 'DNS_TXT' && verification.dnsRecord && (
+            <Instructions
+              steps={[
+                <>
+                  Add a TXT record to the DNS zone for{' '}
+                  <code>{apex}</code>:
+                </>,
+              ]}
+            >
+              <div className="rounded-md border border-border bg-background p-3 text-xs font-mono space-y-1">
+                <div>
+                  <span className="text-muted-foreground">Type: </span>TXT
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Host: </span>@ (root)
+                </div>
+                <div className="break-all">
+                  <span className="text-muted-foreground">Value: </span>
+                  {verification.dnsRecord}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                DNS propagation can take a few minutes — wait until{' '}
+                <code>dig TXT {apex}</code> shows the record before clicking
+                Verify.
+              </p>
+            </Instructions>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onVerify}
+              disabled={readOnly || busy !== null}
+              className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+            >
+              {busy === 'verify' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Verify ownership
+            </button>
+            <button
+              type="button"
+              onClick={() => onFetchToken(method)}
+              disabled={readOnly || busy !== null}
+              className="border border-border px-4 py-2 rounded-lg text-sm font-medium hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {busy === 'fetch' ? 'Refreshing…' : 'Refresh token'}
+            </button>
+            <a
+              href={`https://search.google.com/search-console?resource_id=${encodeURIComponent(siteUrl ?? '')}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 border border-border px-4 py-2 rounded-lg text-sm font-medium hover:bg-accent transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open in Search Console
+            </a>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function Instructions({
+  steps,
+  children,
+}: {
+  steps: React.ReactNode[];
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-3 text-sm">
+      <ol className="list-decimal pl-5 space-y-1 text-foreground">
+        {steps.map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ol>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function CodeBlock({ value, link }: { value: string; link?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-border bg-background p-3">
+      <code className="text-xs font-mono break-all flex-1">
+        {link ? (
+          <a className="underline" href={value} target="_blank" rel="noreferrer">
+            {value}
+          </a>
+        ) : (
+          value
+        )}
+      </code>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+        title="Copy"
+      >
+        <Copy className="h-3.5 w-3.5" />
+        {copied ? 'Copied' : 'Copy'}
+      </button>
     </div>
   );
 }
@@ -374,59 +534,31 @@ function Field({
   value,
   mono,
   className,
+  tone,
+  icon,
 }: {
   label: string;
   value: string;
   mono?: boolean;
   className?: string;
-}) {
-  return (
-    <div>
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div
-        className={`mt-1 text-sm ${mono ? 'font-mono break-all' : ''} ${className ?? ''}`}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone?: 'positive' | 'negative' | 'muted';
+  tone?: 'positive' | 'warning';
+  icon?: React.ReactNode;
 }) {
   const toneClass =
     tone === 'positive'
       ? 'text-green-600 dark:text-green-400'
-      : tone === 'negative'
-        ? 'text-destructive'
-        : 'text-foreground';
+      : tone === 'warning'
+        ? 'text-yellow-700 dark:text-yellow-400'
+        : '';
   return (
-    <div className="rounded-lg border border-border bg-background p-3">
-      <div className={`text-2xl font-bold ${toneClass}`}>{value}</div>
-      <div className="text-xs text-muted-foreground mt-1">{label}</div>
+    <div>
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div
+        className={`mt-1 text-sm inline-flex items-center gap-1.5 ${mono ? 'font-mono break-all' : ''} ${toneClass} ${className ?? ''}`}
+      >
+        {icon}
+        {value}
+      </div>
     </div>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    indexed: 'bg-green-500/10 text-green-700 dark:text-green-400',
-    submitted: 'bg-primary/10 text-primary',
-    not_indexed: 'bg-muted text-muted-foreground',
-    error: 'bg-destructive/10 text-destructive',
-    pending: 'bg-warning/10 text-warning',
-  };
-  const cls = map[status] ?? 'bg-muted text-muted-foreground';
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${cls}`}>
-      {status}
-    </span>
   );
 }
