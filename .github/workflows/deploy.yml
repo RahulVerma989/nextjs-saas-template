@@ -5,9 +5,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# `vars.*` lets you store the registry hostname as a non-secret repo
+# variable; `secrets.*` is kept as a fallback for the original setup.
+# Either side wins — whichever you configured.
 env:
-  REGISTRY: ${{ secrets.DOCKER_REGISTRY_URL }}
-  IMAGE: ${{ secrets.DOCKER_REGISTRY_URL }}/nextjs-saas-template
+  REGISTRY: ${{ vars.DOCKER_REGISTRY_URL || secrets.DOCKER_REGISTRY_URL }}
+  IMAGE_NAME: nextjs-saas-template
 
 jobs:
   build-and-deploy:
@@ -17,9 +20,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Fail fast with a clear message when the registry env vars
+      # aren't wired up. Without this, the next step writes a broken
+      # daemon.json and Docker exits with a confusing systemd error.
+      - name: Verify required configuration
+        run: |
+          missing=()
+          [ -z "${REGISTRY}" ] && missing+=("DOCKER_REGISTRY_URL (vars or secrets)")
+          [ -z "${{ secrets.DOCKER_REGISTRY_USERNAME }}" ] && missing+=("DOCKER_REGISTRY_USERNAME (secret)")
+          [ -z "${{ secrets.DOCKER_REGISTRY_PASSWORD }}" ] && missing+=("DOCKER_REGISTRY_PASSWORD (secret)")
+          [ -z "${{ secrets.DOKPLOY_WEBHOOK_URL }}" ] && missing+=("DOKPLOY_WEBHOOK_URL (secret)")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required GHA configuration:"
+            for m in "${missing[@]}"; do echo "::error::  - $m"; done
+            exit 1
+          fi
+          echo "REGISTRY=${REGISTRY}"
+          echo "IMAGE=${REGISTRY}/${IMAGE_NAME}"
+
+      - name: Compute image tag
+        id: image
+        run: echo "ref=${REGISTRY}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
       - name: Allow self-signed Docker registry
         run: |
-          echo '{"insecure-registries": ["${{ env.REGISTRY }}"]}' | sudo tee /etc/docker/daemon.json
+          echo "{\"insecure-registries\": [\"${REGISTRY}\"]}" | sudo tee /etc/docker/daemon.json
           sudo systemctl restart docker
 
       - name: Set up Docker Buildx
@@ -40,15 +65,15 @@ jobs:
         continue-on-error: true
         run: |
           docker buildx imagetools create \
-            -t ${{ env.IMAGE }}:rollback \
-            ${{ env.IMAGE }}:latest
+            -t ${{ steps.image.outputs.ref }}:rollback \
+            ${{ steps.image.outputs.ref }}:latest
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ env.IMAGE }}:latest
+          tags: ${{ steps.image.outputs.ref }}:latest
           build-args: |
             NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL || 'https://template.rahulverma.cc' }}
 
