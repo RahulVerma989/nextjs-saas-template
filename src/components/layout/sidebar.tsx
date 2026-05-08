@@ -25,7 +25,7 @@ import {
 import { BrandIcon } from '@/components/brand-icon';
 import { LogOut, Moon, PanelLeft, PanelLeftClose, Sun, Zap } from 'lucide-react';
 
-export function Sidebar() {
+export function Sidebar({ isDemo = false }: { isDemo?: boolean }) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = session?.user?.roles?.includes('admin');
@@ -48,7 +48,7 @@ export function Sidebar() {
     >
       <div className="flex grow flex-col overflow-y-auto overflow-x-hidden border-r border-sidebar-border bg-sidebar">
         {/* Header */}
-        <div className={cn('flex h-14 shrink-0 items-center', collapsed ? 'px-2 justify-center' : 'px-4')}>
+        <div className={cn('relative flex h-14 shrink-0 items-center', collapsed ? 'px-2 justify-center' : 'px-4')}>
           {collapsed ? (
             <TooltipProvider delayDuration={300}>
               <Tooltip>
@@ -65,10 +65,38 @@ export function Sidebar() {
               <Link href="/dashboard" className="flex items-center gap-2">
                 <BrandIcon withBackground bgClassName="w-7 h-7" size={16} />
                 <span className="text-lg font-bold text-foreground">{siteConfig.name}</span>
+                {isDemo && (
+                  <TooltipProvider delayDuration={300}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="ml-0.5 inline-flex items-center rounded-md border border-warning/40 bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
+                          Demo
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs max-w-[220px]">
+                        Demo mode is on. Reads work; destructive admin actions
+                        are blocked. Set <code>DEMO_MODE=false</code> to unlock.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
               </Link>
               <button onClick={toggle} className="flex items-center rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors cursor-pointer">
                 <PanelLeftClose className="h-4 w-4" />
               </button>
+            </div>
+          )}
+          {/* Collapsed: show a tiny demo dot under the toggle button */}
+          {collapsed && isDemo && (
+            <div className="absolute top-1.5 right-1.5">
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning ring-2 ring-sidebar" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="text-xs">Demo mode</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           )}
         </div>

@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { isFeatureEnabled } from '@/lib/features/gate';
+import { isDemoMode } from '@/lib/auth/demo';
 
 export default function DashboardLayout({
   children,
@@ -24,7 +25,7 @@ export default function DashboardLayout({
       <SidebarProvider>
         <CreditsProvider>
           <div className="min-h-screen bg-background">
-            <Sidebar />
+            <Sidebar isDemo={isDemoMode()} />
             <DashboardShell>
               <Header />
               <main className="p-4 sm:p-6 lg:p-8">
