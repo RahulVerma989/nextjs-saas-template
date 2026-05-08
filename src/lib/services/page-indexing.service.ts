@@ -146,13 +146,18 @@ export async function runPageSync(): Promise<PageSyncResult> {
       }
     }
 
-    // 2. URL_UPDATED for new / changed routes (budget-capped)
+    // 2. URL_UPDATED for new / changed / previously-errored routes
+    //    (budget-capped).  We DO retry status=error rows even when the
+    //    contentHash hasn't changed — that's how transient failures
+    //    (API not enabled yet, quota hiccup, network blip) self-heal
+    //    on the next sync once the underlying issue is fixed.
     let submitBudget = SUBMIT_BUDGET_PER_RUN;
     for (const route of manifest.routes) {
       if (submitBudget <= 0 || result.quotaHit) break;
       const existing = existingByPath.get(route.path);
       const isChanged = !existing || existing.contentHash !== route.contentHash;
-      if (!isChanged) continue;
+      const isErroredRetry = existing?.status === 'error';
+      if (!isChanged && !isErroredRetry) continue;
 
       const fullUrl = `${baseUrl}${route.path}`;
       // Skip if the page isn't reachable yet — protects against the
@@ -198,9 +203,26 @@ export async function runPageSync(): Promise<PageSyncResult> {
       }
     }
 
-    // 3. Re-inspect submitted-but-not-yet-indexed routes
+    // 3. Re-inspect routes whose status isn't yet "indexed".
+    //    - status=submitted  → check once per cycle (Google may have
+    //      crawled it).
+    //    - status=not_indexed → re-check at most once per 24h so we
+    //      don't burn quota on stable misses.
+    //    - status=error      → handled in the submit phase above.
     if (!result.quotaHit) {
-      const pending = await PageIndex.find({ status: 'submitted' })
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const pending = await PageIndex.find({
+        $or: [
+          { status: 'submitted' },
+          {
+            status: 'not_indexed',
+            $or: [
+              { inspectedAt: { $exists: false } },
+              { inspectedAt: { $lte: oneDayAgo } },
+            ],
+          },
+        ],
+      })
         .sort({ inspectedAt: 1 })
         .limit(INSPECT_BUDGET_PER_RUN)
         .lean();
