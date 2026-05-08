@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminApi, requireAdminWriteApi } from '@/lib/auth/admin-guard';
 import { connectDB } from '@/lib/db/connection';
 import { getUserCrud } from '@/lib/db/crud/user.crud';
+import { shouldMaskPiiFor, maskEmail } from '@/lib/auth/demo';
 import type { IUser } from '@/types/db.types';
 
 type RouteContext = { params: Promise<{ userId: string }> };
@@ -24,9 +25,14 @@ export async function GET(req: NextRequest, context: RouteContext) {
       );
     }
 
+    const viewerEmail = adminCheck.session?.user?.email ?? null;
+    const payload = shouldMaskPiiFor(viewerEmail)
+      ? { ...user, email: maskEmail(user.email) }
+      : user;
+
     return NextResponse.json({
       success: true,
-      data: user,
+      data: payload,
     });
   } catch (error) {
     console.error('GET /api/admin/users/[userId] error:', error);

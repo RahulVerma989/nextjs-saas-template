@@ -234,9 +234,16 @@ export async function runPageSync(): Promise<PageSyncResult> {
           await PageIndex.updateOne(
             { _id: doc._id },
             {
-              status: r.indexed ? 'indexed' : 'not_indexed',
-              coverageState: r.coverageState,
-              inspectedAt: new Date(),
+              $set: {
+                status: r.indexed ? 'indexed' : 'not_indexed',
+                coverageState: r.coverageState,
+                inspectedAt: new Date(),
+              },
+              // A successful inspection means the URL itself is fine
+              // — clear any submission error from a prior cycle so
+              // the UI doesn't keep showing a stale "API not enabled"
+              // message after the underlying issue was fixed.
+              $unset: { lastError: '' },
             },
           );
           result.inspected += 1;

@@ -38,3 +38,35 @@ export function isAdminWriteAllowed(
   if (!isDemoMode()) return true;
   return isOwnerEmail(email);
 }
+
+/**
+ * Partially mask an email for read-only demo visitors.  Keeps the
+ * first 1-2 characters of the local part and the full domain so an
+ * admin still recognises which user a row maps to, but a demo
+ * visitor doesn't get a clean PII dump.  Real admins (owner
+ * allowlist) see the unmasked email.
+ *
+ *   "rahul@gmail.com"     -> "ra***@gmail.com"
+ *   "j@x.io"              -> "j***@x.io"
+ */
+export function maskEmail(email: string | null | undefined): string {
+  if (!email) return '';
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return email;
+  const local = email.slice(0, at);
+  const domain = email.slice(at);
+  const visible = local.length <= 2 ? local.slice(0, 1) : local.slice(0, 2);
+  return `${visible}***${domain}`;
+}
+
+/**
+ * Convenience: should fields like email be masked for `viewerEmail`?
+ * False for the deployment owner (they always see real data),
+ * true for demo visitors.
+ */
+export function shouldMaskPiiFor(
+  viewerEmail: string | null | undefined,
+): boolean {
+  if (!isDemoMode()) return false;
+  return !isOwnerEmail(viewerEmail);
+}

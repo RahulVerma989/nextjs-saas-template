@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth/admin-guard';
 import { connectDB } from '@/lib/db/connection';
 import { getUserCrud } from '@/lib/db/crud/user.crud';
+import { shouldMaskPiiFor, maskEmail } from '@/lib/auth/demo';
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,6 +17,18 @@ export async function GET(req: NextRequest) {
     await connectDB();
     const userCrud = getUserCrud();
     const result = await userCrud.listUsers({ page, limit, search });
+
+    // In demo mode, mask emails for non-owner viewers so the admin UI
+    // doesn't leak real user emails to drive-by visitors.  The owner
+    // (whose email is on `siteConfig.adminEmails`) still sees real
+    // data so they can actually operate the system.
+    const viewerEmail = adminCheck.session?.user?.email ?? null;
+    if (shouldMaskPiiFor(viewerEmail) && Array.isArray(result?.users)) {
+      result.users = result.users.map((u) => ({
+        ...u,
+        email: maskEmail(u.email),
+      }));
+    }
 
     return NextResponse.json({
       success: true,

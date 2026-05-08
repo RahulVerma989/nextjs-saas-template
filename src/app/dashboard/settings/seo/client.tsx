@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Circle,
 } from 'lucide-react';
+import { DemoButton } from '@/components/ui/demo-button';
 
 type Method = 'META' | 'FILE' | 'DNS_TXT';
 
@@ -295,25 +296,34 @@ export function GSCSettingsClient(props: Props) {
             )}
 
             <div className="flex flex-wrap gap-2 pt-1">
-              <a
-                href={`/api/integrations/gsc/connect?host=${encodeURIComponent(
-                  (props.siteUrl ?? props.targetHost)
-                    .replace(/^sc-domain:/, '')
-                    .replace(/^https?:\/\//, '')
-                    .replace(/\/$/, ''),
-                )}`}
-                className="border border-border px-3 py-1.5 rounded-md text-xs font-medium hover:bg-accent transition-colors"
+              <DemoButton
+                readOnly={props.readOnly}
+                tooltipEnabled="Re-run the OAuth flow to refresh the access token"
+                tooltipDisabled="Disabled in demo mode"
+                href={
+                  props.readOnly
+                    ? undefined
+                    : `/api/integrations/gsc/connect?host=${encodeURIComponent(
+                        (props.siteUrl ?? props.targetHost)
+                          .replace(/^sc-domain:/, '')
+                          .replace(/^https?:\/\//, '')
+                          .replace(/\/$/, ''),
+                      )}`
+                }
+                className="border border-border px-3 py-1.5 rounded-md text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Reconnect
-              </a>
-              <button
-                type="button"
+              </DemoButton>
+              <DemoButton
+                readOnly={props.readOnly}
+                tooltipEnabled="Drop the saved tokens; submitted pages stop receiving updates."
+                tooltipDisabled="Disabled in demo mode"
                 onClick={handleDisconnect}
-                disabled={props.readOnly || busy !== null}
+                disabled={busy !== null}
                 className="text-destructive border border-destructive/30 px-3 py-1.5 rounded-md text-xs font-medium hover:bg-destructive/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
-              </button>
+              </DemoButton>
             </div>
           </div>
         ) : (
@@ -687,15 +697,16 @@ function VerificationPanel({
 
       {!haveToken ? (
         <div>
-          <button
-            type="button"
+          <DemoButton
+            readOnly={readOnly}
+            disabled={busy !== null}
+            tooltipEnabled="Ask Google for a fresh verification token for this method"
             onClick={() => onFetchToken(method)}
-            disabled={readOnly || busy !== null}
-            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {busy === 'fetch' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             Get verification token
-          </button>
+          </DemoButton>
         </div>
       ) : (
         <div className="space-y-3">
@@ -742,28 +753,30 @@ function VerificationPanel({
           )}
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
+            <DemoButton
+              readOnly={readOnly}
+              disabled={busy !== null}
+              tooltipEnabled="Ask Google to check that the token is live on your site"
               onClick={onVerify}
-              disabled={readOnly || busy !== null}
-              className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {busy === 'verify' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               Verify ownership
-            </button>
-            <button
-              type="button"
+            </DemoButton>
+            <DemoButton
+              readOnly={readOnly}
+              disabled={busy !== null}
+              tooltipEnabled="Re-fetch a fresh token from Google"
               onClick={() => onFetchToken(method)}
-              disabled={readOnly || busy !== null}
-              className="border border-border px-3 py-1.5 rounded-md text-xs font-medium hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="border border-border px-3 py-1.5 rounded-md text-xs font-medium hover:bg-accent disabled:opacity-50 transition-colors"
             >
               {busy === 'fetch' ? 'Refreshing…' : 'Refresh token'}
-            </button>
+            </DemoButton>
             <a
               href={`https://search.google.com/search-console?resource_id=${encodeURIComponent(siteUrl ?? '')}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 rounded-md text-xs font-medium hover:bg-accent transition-colors"
+              className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 rounded-md text-xs font-medium hover:bg-accent transition-colors cursor-pointer"
             >
               <ExternalLink className="h-3 w-3" />
               Open in Search Console
