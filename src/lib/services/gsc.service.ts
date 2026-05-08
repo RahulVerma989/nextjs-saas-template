@@ -62,6 +62,28 @@ export function getTargetHost(): string {
 }
 
 /**
+ * Best-effort apex extraction.  Walks past leading subdomain labels
+ * and stops one above the TLD, e.g. `template.rahulverma.cc` ->
+ * `rahulverma.cc`, `app.example.co.uk` -> `example.co.uk`.
+ *
+ * For the country-code two-label TLDs (`co.uk`, `com.au`, etc.) we
+ * keep the last 3 segments; otherwise we keep the last 2.  This is
+ * a heuristic — verify against your actual setup before relying on
+ * it for unfamiliar TLDs.
+ */
+export function getApexHost(host: string): string {
+  const stripped = host.replace(/^www\./, '').toLowerCase();
+  const parts = stripped.split('.');
+  if (parts.length <= 2) return stripped;
+  const ccTLD = /^(?:co|com|net|org|gov|edu|ac)\.[a-z]{2}$/i;
+  const lastTwo = parts.slice(-2).join('.');
+  if (ccTLD.test(lastTwo)) {
+    return parts.slice(-3).join('.');
+  }
+  return lastTwo;
+}
+
+/**
  * Build the prioritised list of GSC property identifiers we'd accept
  * for a given host.  Domain properties (`sc-domain:…`) cover all
  * subdomains and protocols, so we accept the exact host AND any
@@ -186,6 +208,10 @@ async function findOrCreateSiteForHost(
 export async function exchangeCodeAndStore(args: {
   code: string;
   userId: string;
+  /** Host to find-or-create the GSC property for.  Defaults to the
+   *  deployment host; admins can override via the connect-time picker
+   *  to bind to the apex domain instead. */
+  host?: string;
 }): Promise<IGSCConnection> {
   const oauth = buildOAuthClient();
   const { tokens } = await oauth.getToken(args.code);
@@ -196,7 +222,7 @@ export async function exchangeCodeAndStore(args: {
   }
   oauth.setCredentials(tokens);
 
-  const host = getTargetHost();
+  const host = (args.host ?? getTargetHost()).replace(/^www\./, '').toLowerCase();
   const { siteUrl, verified } = await findOrCreateSiteForHost(oauth, host);
 
   await connectDB();
@@ -325,13 +351,18 @@ function siteForVerification(host: string, method: GSCVerificationMethod) {
  * Fetch a verification token from Google for the chosen method and
  * persist the relevant fields on the connection so the settings UI
  * (and metadata.verification.google) can render them.
+ *
+ * `verifyHost` lets the caller verify against the apex domain
+ * instead of the deployment host — useful for DNS verification
+ * when the user manages only the apex zone, and for sc-domain
+ * properties that should cover all subdomains.
  */
 export async function fetchVerificationToken(
   method: GSCVerificationMethod,
+  verifyHost?: string,
 ): Promise<IGSCConnection> {
   const { auth } = await getAuthedClient();
-  const host = getTargetHost();
-  const stripped = host.replace(/^www\./, '');
+  const host = (verifyHost ?? getTargetHost()).replace(/^www\./, '').toLowerCase();
   const sv = google.siteVerification({ version: 'v1', auth });
 
   const res = await sv.webResource.getToken({
@@ -345,7 +376,10 @@ export async function fetchVerificationToken(
     throw new Error('Google did not return a verification token. Try a different method.');
   }
 
-  const update: Partial<IGSCConnection> = { verificationMethod: method };
+  const update: Partial<IGSCConnection> = {
+    verificationMethod: method,
+    verificationHost: host,
+  };
   if (method === 'META') {
     update.verificationMetaToken = extractMetaContent(rawToken);
     update.verificationFileName = undefined;
@@ -378,7 +412,6 @@ export async function fetchVerificationToken(
     { new: true },
   ).lean<IGSCConnection>();
   if (!conn) throw new Error('GSC is not connected');
-  void stripped;
   return conn;
 }
 
@@ -390,8 +423,11 @@ export async function fetchVerificationToken(
 export async function runVerification(
   method: GSCVerificationMethod,
 ): Promise<{ verified: boolean; error?: string; conn: IGSCConnection | null }> {
-  const { auth } = await getAuthedClient();
-  const host = getTargetHost();
+  const { auth, conn: existing } = await getAuthedClient();
+  // Always verify against the host the latest token was issued for
+  // (apex or target).  Falls back to the target host for legacy
+  // connections that were created before `verificationHost` existed.
+  const host = (existing.verificationHost ?? getTargetHost()).replace(/^www\./, '').toLowerCase();
   const sv = google.siteVerification({ version: 'v1', auth });
   try {
     await sv.webResource.insert({
@@ -406,6 +442,34 @@ export async function runVerification(
     });
     const conn = await getConnection();
     return { verified: false, error: message, conn };
+  }
+
+  // If we just verified an apex but the connection is still pointing
+  // at the subdomain `sc-domain:` (or vice versa), repoint to the
+  // newly-verified property so indexing calls land on the right one.
+  // Auto-create the matching property if it doesn't exist yet.
+  try {
+    const newSiteUrl = `sc-domain:${host}`;
+    if (existing.siteUrl !== newSiteUrl) {
+      const webmasters = google.webmasters({ version: 'v3', auth });
+      const list = await webmasters.sites.list();
+      const sites = list.data.siteEntry ?? [];
+      const has = sites.some((s) => s.siteUrl === newSiteUrl);
+      if (!has) {
+        try {
+          await webmasters.sites.add({ siteUrl: newSiteUrl });
+        } catch {
+          // Maybe already exists / no perm; fall through.
+        }
+      }
+      await connectDB();
+      await GSCConnection.updateOne(
+        { _id: GSC_CONNECTION_ID },
+        { siteUrl: newSiteUrl, lastError: undefined },
+      );
+    }
+  } catch {
+    // Non-fatal — verification succeeded; siteUrl repoint is nice-to-have.
   }
 
   const conn = await refreshVerificationStatus();

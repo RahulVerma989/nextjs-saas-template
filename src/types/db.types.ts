@@ -100,7 +100,7 @@ export interface ICreditTransaction extends DocBase {
   createdAt: Date;
 }
 
-// ─── API Key ────────────────────────────────────────────────
+// ─── API Key ───────────────────────────────────────────────
 
 export interface IAPIKey extends DocBase {
   _id: string;
@@ -241,6 +241,8 @@ export interface IGSCConnection extends DocBase {
   verified?: boolean;
   /** Method most recently used to fetch a verification token. */
   verificationMethod?: GSCVerificationMethod;
+  /** Host (e.g. "rahulverma.cc" vs "template.rahulverma.cc") the most recent verification token was issued against. */
+  verificationHost?: string;
   /** Bare META content value (the part Next.js's metadata.verification.google expects). */
   verificationMetaToken?: string;
   /** Filename Google asks you to upload at the domain root for FILE verification. */

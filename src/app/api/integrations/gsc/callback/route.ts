@@ -46,7 +46,9 @@ export async function GET(req: NextRequest) {
 
   const jar = await cookies();
   const expectedState = jar.get('gsc_oauth_state')?.value;
+  const targetHost = jar.get('gsc_target_host')?.value;
   jar.delete('gsc_oauth_state');
+  jar.delete('gsc_target_host');
 
   if (!code || !stateFromGoogle || !expectedState || stateFromGoogle !== expectedState) {
     settingsUrl.searchParams.set('gsc', 'error:invalid_state');
@@ -54,7 +56,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    await exchangeCodeAndStore({ code, userId: session.user.id });
+    await exchangeCodeAndStore({
+      code,
+      userId: session.user.id,
+      host: targetHost,
+    });
     settingsUrl.searchParams.set('gsc', 'connected');
     return NextResponse.redirect(settingsUrl);
   } catch (err) {

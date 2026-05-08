@@ -28,6 +28,7 @@ const GSCConnectionSchema = new Schema<IGSCConnection>(
     /** Verification state — refreshed on connect/verify/sync. */
     verified: { type: Boolean, default: false },
     verificationMethod: { type: String, enum: ['META', 'FILE', 'DNS_TXT'] },
+    verificationHost: { type: String },
     verificationMetaToken: { type: String },
     verificationFileName: { type: String },
     verificationFileContent: { type: String },
