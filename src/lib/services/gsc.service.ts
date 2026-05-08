@@ -208,6 +208,10 @@ async function findOrCreateSiteForHost(
 export async function exchangeCodeAndStore(args: {
   code: string;
   userId: string;
+  /** Host to find-or-create the GSC property for.  Defaults to the
+   *  deployment host; admins can override via the connect-time picker
+   *  to bind to the apex domain instead. */
+  host?: string;
 }): Promise<IGSCConnection> {
   const oauth = buildOAuthClient();
   const { tokens } = await oauth.getToken(args.code);
@@ -218,7 +222,7 @@ export async function exchangeCodeAndStore(args: {
   }
   oauth.setCredentials(tokens);
 
-  const host = getTargetHost();
+  const host = (args.host ?? getTargetHost()).replace(/^www\./, '').toLowerCase();
   const { siteUrl, verified } = await findOrCreateSiteForHost(oauth, host);
 
   await connectDB();

@@ -1,7 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/auth';
 import { siteConfig } from '@/config/site.config';
-import { buildConsentUrl } from '@/lib/services/gsc.service';
+import {
+  buildConsentUrl,
+  getTargetHost,
+  getApexHost,
+} from '@/lib/services/gsc.service';
 import { randomBytes } from 'crypto';
 import { cookies } from 'next/headers';
 
@@ -11,10 +15,14 @@ import { cookies } from 'next/headers';
  * Starts the OAuth consent flow for connecting Google Search Console.
  * Admin-only — only an admin should be wiring up site-wide indexing.
  *
- * The CSRF state is stored in a short-lived signed cookie and
- * verified by the callback route.
+ * Optional `?host=` query param picks which property to bind to:
+ * the deployment host (default) or its apex domain.  Anything else
+ * is rejected so the caller can't ask us to verify someone else's
+ * domain.  The choice rides through the OAuth handshake in a
+ * short-lived cookie so the callback can pass it to
+ * `exchangeCodeAndStore`.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -26,15 +34,22 @@ export async function GET() {
     return NextResponse.json({ success: false, error: 'Admin only' }, { status: 403 });
   }
 
+  const target = getTargetHost();
+  const apex = getApexHost(target);
+  const requested = (req.nextUrl.searchParams.get('host') ?? '').toLowerCase();
+  const chosenHost = requested === apex ? apex : target;
+
   const state = randomBytes(24).toString('hex');
   const jar = await cookies();
-  jar.set('gsc_oauth_state', state, {
+  const cookieOpts = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: 'lax' as const,
     path: '/',
-    maxAge: 600, // 10 minutes
-  });
+    maxAge: 600,
+  };
+  jar.set('gsc_oauth_state', state, cookieOpts);
+  jar.set('gsc_target_host', chosenHost, cookieOpts);
 
   try {
     const url = buildConsentUrl(state);
