@@ -46,15 +46,19 @@ export function GSCSettingsClient(props: Props) {
   const [sitesLoaded, setSitesLoaded] = useState(false);
   const [method, setMethod] = useState<Method>(props.verification.method ?? 'META');
   const hasSubdomain = props.targetHost !== props.apexHost;
-  // Default to apex when the deployment lives on a subdomain — covers
-  // every subdomain with one TXT record, and matches what most DNS
-  // providers (Hostinger, Cloudflare, Namecheap) make easy.
-  const [verifyApex, setVerifyApex] = useState<boolean>(
-    props.verification.host
-      ? props.verification.host === props.apexHost
-      : hasSubdomain,
-  );
+  // Verify-time toggle.  Defaults to the host the existing token was
+  // issued for, then to the connected siteUrl (sc-domain:<host>),
+  // then to the deployment's own host.  Apex is opt-in.
+  const initialVerifyApex = (() => {
+    if (props.verification.host) return props.verification.host === props.apexHost;
+    if (props.siteUrl?.startsWith(`sc-domain:${props.apexHost}`)) return true;
+    return false;
+  })();
+  const [verifyApex, setVerifyApex] = useState<boolean>(initialVerifyApex);
   const verifyHost = verifyApex ? props.apexHost : props.targetHost;
+  // Connect-time chooser (only used when not yet connected).
+  const [connectApex, setConnectApex] = useState<boolean>(false);
+  const connectHost = connectApex ? props.apexHost : props.targetHost;
 
   useEffect(() => {
     const status = search.get('gsc');
@@ -264,7 +268,14 @@ export function GSCSettingsClient(props: Props) {
 
             <div className="flex flex-wrap gap-2 pt-2">
               <a
-                href="/api/integrations/gsc/connect"
+                href={`/api/integrations/gsc/connect?host=${encodeURIComponent(
+                  // Keep the same property on reconnect — strip the
+                  // `sc-domain:` prefix and any URL-prefix scheme.
+                  (props.siteUrl ?? props.targetHost)
+                    .replace(/^sc-domain:/, '')
+                    .replace(/^https?:\/\//, '')
+                    .replace(/\/$/, ''),
+                )}`}
                 className="border border-border px-4 py-2 rounded-lg text-sm font-medium hover:bg-accent transition-colors"
               >
                 Reconnect
@@ -288,8 +299,42 @@ export function GSCSettingsClient(props: Props) {
               <code>siteverification</code> scopes so we can add and verify the
               property on your behalf.
             </p>
+
+            {hasSubdomain && (
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                  Connect against
+                </div>
+                <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setConnectApex(false)}
+                    className={`px-3 py-1.5 transition-colors ${
+                      !connectApex ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-accent'
+                    }`}
+                  >
+                    Subdomain ({props.targetHost})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConnectApex(true)}
+                    className={`px-3 py-1.5 transition-colors border-l border-border ${
+                      connectApex ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-accent'
+                    }`}
+                  >
+                    Apex ({props.apexHost})
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {connectApex
+                    ? `Creates sc-domain:${props.apexHost} — covers every subdomain in one go. Verification needs a TXT on the apex zone.`
+                    : `Creates sc-domain:${props.targetHost} — only this subdomain. Verification can use a meta tag, file, or DNS TXT on the subdomain.`}
+                </p>
+              </div>
+            )}
+
             <a
-              href="/api/integrations/gsc/connect"
+              href={`/api/integrations/gsc/connect?host=${encodeURIComponent(connectHost)}`}
               className="inline-block bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
             >
               Connect Google Search Console
