@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
     // (whose email is on `siteConfig.adminEmails`) still sees real
     // data so they can actually operate the system.
     const viewerEmail = adminCheck.session?.user?.email ?? null;
-    if (shouldMaskPiiFor(viewerEmail) && Array.isArray(result?.users)) {
-      result.users = result.users.map((u) => ({
+    if (shouldMaskPiiFor(viewerEmail) && Array.isArray(result?.items)) {
+      result.items = result.items.map((u) => ({
         ...u,
         email: maskEmail(u.email),
       }));
