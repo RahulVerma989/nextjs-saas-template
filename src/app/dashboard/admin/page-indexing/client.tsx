@@ -64,15 +64,16 @@ export function PageIndexingClient(props: Props) {
 
   if (!props.connected) {
     return (
-      <div className="max-w-4xl">
-        <h1 className="text-2xl font-bold mb-2">Page Indexing</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          Connect Google Search Console first to start tracking which marketing
-          pages are indexed.
-        </p>
+      <div className="max-w-5xl space-y-4">
+        <div>
+          <h1 className="text-lg font-semibold text-foreground">Page indexing</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Connect Google Search Console first to start tracking marketing pages.
+          </p>
+        </div>
         <Link
           href="/dashboard/settings/seo"
-          className="inline-block bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+          className="inline-block bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-xs font-medium hover:opacity-90 transition-opacity"
         >
           Go to SEO settings
         </Link>
@@ -81,13 +82,16 @@ export function PageIndexingClient(props: Props) {
   }
 
   return (
-    <div className="max-w-5xl">
-      <h1 className="text-2xl font-bold mb-2">Page Indexing</h1>
-      <p className="text-sm text-muted-foreground mb-6">
-        Counts come from the page-indexing job, which runs every 30 minutes
-        and on every deploy. Routes are pulled from{' '}
-        <code>src/config/indexable-routes.ts</code>.
-      </p>
+    <div className="max-w-5xl space-y-4">
+      <div>
+        <h1 className="text-lg font-semibold text-foreground">Page indexing</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Auto-syncs <strong>every 30 min via Agenda</strong> + once per
+          deploy (boot hook). Routes from{' '}
+          <code className="text-[11px]">src/config/indexable-routes.ts</code>;
+          content hashes from <code className="text-[11px]">scripts/build-page-manifest.ts</code>.
+        </p>
+      </div>
 
       {banner && (
         <div

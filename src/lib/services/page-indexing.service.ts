@@ -48,6 +48,8 @@ export interface PageSyncResult {
   submitted: number;
   inspected: number;
   errors: number;
+  /** URLs we skipped this run because the live page wasn't reachable. */
+  skippedUnreachable: number;
   quotaHit: boolean;
   notes: string[];
   skipped?: string;
@@ -95,6 +97,7 @@ export async function runPageSync(): Promise<PageSyncResult> {
     submitted: 0,
     inspected: 0,
     errors: 0,
+    skippedUnreachable: 0,
     quotaHit: false,
     notes: [],
   };
@@ -151,8 +154,18 @@ export async function runPageSync(): Promise<PageSyncResult> {
       const isChanged = !existing || existing.contentHash !== route.contentHash;
       if (!isChanged) continue;
 
+      const fullUrl = `${baseUrl}${route.path}`;
+      // Skip if the page isn't reachable yet — protects against the
+      // Dokploy "boot fired before traffic switched" race so we never
+      // hand Google a 404.
+      const live = await isLive(fullUrl);
+      if (!live) {
+        result.skippedUnreachable += 1;
+        continue;
+      }
+
       try {
-        const ts = await gsc.submitUrlUpdated(`${baseUrl}${route.path}`);
+        const ts = await gsc.submitUrlUpdated(fullUrl);
         await PageIndex.findByIdAndUpdate(
           route.path,
           {
@@ -226,4 +239,29 @@ function isQuotaError(err: unknown): boolean {
   const e = err as { code?: number | string; message?: string };
   if (e.code === 429 || e.code === '429') return true;
   return /quota|rate.?limit/i.test(e.message ?? '');
+}
+
+/**
+ * HEAD-check the live URL to verify it's reachable before pinging
+ * Google.  On Dokploy / Vercel / Cloudflare deploys, the boot hook
+ * can fire before the new build is actually serving traffic, and a
+ * URL_UPDATED submission for an unreachable URL gets recorded by
+ * Google as a 404.  Mirrors the safety check Quillly's
+ * page-indexing.service uses.
+ */
+async function isLive(url: string): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, {
+      method: 'HEAD',
+      signal: controller.signal,
+      redirect: 'follow',
+      headers: { 'User-Agent': 'GSC-PageIndexer/1.0' },
+    });
+    clearTimeout(timeout);
+    return res.ok;
+  } catch {
+    return false;
+  }
 }

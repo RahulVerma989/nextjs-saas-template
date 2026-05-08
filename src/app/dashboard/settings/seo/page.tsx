@@ -37,6 +37,16 @@ export default async function SEOSettingsPage() {
   // "verified" the moment Google approves the proof — no manual reload.
   const conn = (await refreshVerificationStatus()) ?? (await getConnection());
 
+  // GCP setup checklist — surface prerequisites so the user can see at
+  // a glance which pieces are wired up.  We can detect env-var
+  // presence server-side, but enabled APIs / OAuth scopes / verified
+  // ownership are all upstream, so we tag those as "manual" and link
+  // out.
+  const gcpClientConfigured = !!(
+    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+  );
+  const redirectUri = `${siteConfig.url}/api/integrations/gsc/callback`;
+
   return (
     <GSCSettingsClient
       connected={!!conn}
@@ -56,6 +66,8 @@ export default async function SEOSettingsPage() {
         dnsRecord: conn?.verificationDnsRecord ?? null,
       }}
       readOnly={isDemoMode() && !isOwnerEmail(session.user.email)}
+      gcpClientConfigured={gcpClientConfigured}
+      redirectUri={redirectUri}
     />
   );
 }
