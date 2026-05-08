@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth/auth';
 import { connectDB } from '@/lib/db/connection';
 import { getUserCrud } from '@/lib/db/crud/user.crud';
-import { isDemoMode } from '@/lib/auth/demo';
+import { isDemoMode, shouldMaskPiiFor, maskEmail } from '@/lib/auth/demo';
 import { DemoBanner } from '@/components/demo-banner';
 import { UsersTable } from './users-table';
 
@@ -26,6 +26,11 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
   const userCrud = getUserCrud();
   const result = await userCrud.listUsers({ page, limit, search });
 
+  // Same masking the API does — applied here too because the table
+  // renders server-side (no API hop).  Owner allowlist sees real
+  // emails; demo visitors see e.g. "ra***@gmail.com".
+  const mask = shouldMaskPiiFor(session.user.email);
+
   return (
     <div className="max-w-6xl">
       <h1 className="text-2xl font-bold mb-1">Users</h1>
@@ -38,7 +43,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
       <UsersTable
         users={result.items.map((u) => ({
           _id: u._id,
-          email: u.email,
+          email: mask ? maskEmail(u.email) : u.email,
           name: u.name,
           plan: u.plan,
           accountStatus: u.accountStatus,

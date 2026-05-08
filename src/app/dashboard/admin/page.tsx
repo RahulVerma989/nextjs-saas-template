@@ -6,6 +6,7 @@ import { siteConfig } from '@/config/site.config';
 import { connectDB } from '@/lib/db/connection';
 import { User, Subscription } from '@/lib/db/models';
 import { DemoBanner } from '@/components/demo-banner';
+import { shouldMaskPiiFor, maskEmail } from '@/lib/auth/demo';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,8 @@ export default async function AdminOverviewPage() {
   if (!session.user.roles?.includes('admin')) redirect('/dashboard');
 
   await connectDB();
+
+  const mask = shouldMaskPiiFor(session.user.email);
 
   // Counts — kept simple to avoid heavy aggregations.
   const [
@@ -146,7 +149,9 @@ export default async function AdminOverviewPage() {
               >
                 <div>
                   <div className="font-medium">{u.name}</div>
-                  <div className="text-xs text-muted-foreground">{u.email}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {mask ? maskEmail(u.email) : u.email}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 text-xs">
                   <span className="px-2 py-0.5 rounded bg-muted text-muted-foreground">
